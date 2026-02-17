@@ -285,7 +285,13 @@ class LangGraphService:
             raise ValueError(f"Failed to load graph module: {file_path}")
 
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module_name = spec.name
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            sys.modules.pop(module_name, None)
+            raise
 
         # Get the exported graph
         export_name = graph_info["export_name"]

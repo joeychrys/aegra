@@ -1,6 +1,7 @@
 """Unit tests for LangGraphService"""
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
@@ -358,6 +359,100 @@ class TestLangGraphServiceGraphs:
 
             with pytest.raises(ValueError, match="Graph export not found"):
                 await service._load_graph_from_file("test_graph", graph_info)
+
+    @pytest.mark.asyncio
+    async def test_load_graph_from_file_registers_module_in_sys_modules(self) -> None:
+        """Test that dynamically loaded module is registered in sys.modules before execution.
+
+        This is required for dataclasses, pickle, typing.get_type_hints, and
+        other stdlib features that rely on module introspection via sys.modules.
+        """
+        service = LangGraphService()
+
+        mock_module = Mock()
+        mock_graph = object()
+        mock_module.graph = mock_graph
+
+        recorded_modules: dict[str, bool] = {}
+
+        def fake_exec_module(mod: object) -> None:
+            # At exec time the module must already be in sys.modules
+            recorded_modules["present"] = "graphs.test_dc" in sys.modules
+
+        mock_loader = Mock()
+        mock_loader.exec_module = fake_exec_module
+
+        mock_spec = Mock()
+        mock_spec.name = "graphs.test_dc"
+        mock_spec.loader = mock_loader
+
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=mock_spec),
+            patch("importlib.util.module_from_spec", return_value=mock_module),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.resolve", return_value=Path("/absolute/test.py")),
+        ):
+            graph_info = {"file_path": "test.py", "export_name": "graph"}
+            await service._load_graph_from_file("test_dc", graph_info)
+
+        assert recorded_modules["present"] is True
+        # Cleanup
+        sys.modules.pop("graphs.test_dc", None)
+
+    @pytest.mark.asyncio
+    async def test_load_graph_from_file_cleans_sys_modules_on_exec_error(self) -> None:
+        """Test that module is removed from sys.modules when exec_module raises."""
+        service = LangGraphService()
+
+        mock_module = Mock()
+        module_name = "graphs.test_fail"
+
+        mock_loader = Mock()
+        mock_loader.exec_module.side_effect = SyntaxError("bad code")
+
+        mock_spec = Mock()
+        mock_spec.name = module_name
+        mock_spec.loader = mock_loader
+
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=mock_spec),
+            patch("importlib.util.module_from_spec", return_value=mock_module),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.resolve", return_value=Path("/absolute/test.py")),
+        ):
+            graph_info = {"file_path": "test.py", "export_name": "graph"}
+
+            with pytest.raises(SyntaxError, match="bad code"):
+                await service._load_graph_from_file("test_fail", graph_info)
+
+        assert module_name not in sys.modules
+
+    @pytest.mark.asyncio
+    async def test_load_graph_from_file_with_dataclass(self, tmp_path: Path) -> None:
+        """Test that a graph module containing a dataclass loads without errors.
+
+        Regression test for: https://github.com/aegra-dev/aegra/issues/XXX
+        Dataclasses require the module to be in sys.modules during class creation.
+        """
+        graph_file = tmp_path / "dc_graph.py"
+        graph_file.write_text(
+            "from dataclasses import dataclass\n"
+            "\n"
+            "@dataclass\n"
+            "class MyState:\n"
+            "    name: str = 'test'\n"
+            "\n"
+            "graph = MyState()\n"
+        )
+
+        service = LangGraphService()
+
+        graph_info = {"file_path": str(graph_file), "export_name": "graph"}
+        result = await service._load_graph_from_file("dc_graph", graph_info)
+
+        assert result.name == "test"  # type: ignore[attr-defined]
+        # Cleanup
+        sys.modules.pop("graphs.dc_graph", None)
 
     def test_list_graphs(self):
         """Test listing available graphs"""

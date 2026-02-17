@@ -1,7 +1,7 @@
 """Integration tests for threads CRUD operations"""
 
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -457,7 +457,6 @@ class TestThreadGetState:
 
         # Mock langgraph service and agent
         mock_agent = AsyncMock()
-        from unittest.mock import Mock
 
         mock_snapshot = Mock()
         mock_snapshot.values = {"messages": ["hello"]}
@@ -498,7 +497,6 @@ class TestThreadUpdateState:
         client = make_client(app)
 
         mock_agent = AsyncMock()
-        from unittest.mock import Mock
 
         mock_snapshot = Mock()
         mock_snapshot.values = {"key": "val"}
@@ -537,7 +535,6 @@ class TestThreadUpdateState:
         mock_agent = AsyncMock()
         # aupdate_state returns the new config
         mock_agent.aupdate_state.return_value = {"configurable": {"checkpoint_id": "new-cp", "checkpoint_ns": ""}}
-        from unittest.mock import Mock
 
         mock_agent.with_config = Mock(return_value=mock_agent)
         mock_agent.with_config.return_value = mock_agent
@@ -643,7 +640,6 @@ class TestThreadStateCheckpoint:
         client = make_client(app)
 
         mock_agent = AsyncMock()
-        from unittest.mock import Mock
 
         mock_snapshot = Mock()
         mock_snapshot.values = {"foo": "bar"}
@@ -720,7 +716,6 @@ class TestThreadStateCheckpointPost:
         client = make_client(app)
 
         mock_agent = AsyncMock()
-        from unittest.mock import Mock
 
         mock_snapshot = Mock()
         mock_snapshot.values = {"foo": "bar"}

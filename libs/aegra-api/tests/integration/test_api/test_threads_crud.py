@@ -463,6 +463,7 @@ class TestThreadGetState:
         mock_snapshot.values = {"messages": ["hello"]}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
+        mock_snapshot.interrupts = []
         mock_snapshot.metadata = {}
         mock_snapshot.config = {"configurable": {"checkpoint_id": "cp-1"}}
         mock_snapshot.created_at = "2024-01-01T00:00:00Z"
@@ -503,6 +504,7 @@ class TestThreadUpdateState:
         mock_snapshot.values = {"key": "val"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
+        mock_snapshot.interrupts = []
         mock_snapshot.metadata = {}
         mock_snapshot.config = {"configurable": {"checkpoint_id": "cp-1"}}
         mock_snapshot.created_at = "2024-01-01T00:00:00Z"
@@ -647,6 +649,7 @@ class TestThreadStateCheckpoint:
         mock_snapshot.values = {"foo": "bar"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
+        mock_snapshot.interrupts = []
         mock_snapshot.metadata = {}
         mock_snapshot.config = {"configurable": {"checkpoint_id": "cp-target"}}
         mock_snapshot.created_at = "2024-01-01T00:00:00Z"
@@ -723,6 +726,7 @@ class TestThreadStateCheckpointPost:
         mock_snapshot.values = {"foo": "bar"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
+        mock_snapshot.interrupts = []
         mock_snapshot.metadata = {}
         mock_snapshot.config = {"configurable": {"checkpoint_id": "cp-post"}}
         mock_snapshot.created_at = "2024-01-01T00:00:00Z"

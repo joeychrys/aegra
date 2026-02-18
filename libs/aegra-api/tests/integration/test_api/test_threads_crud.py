@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from langgraph.types import StateSnapshot
 
 from aegra_api.core.orm import get_session as core_get_session
 from tests.fixtures.clients import create_test_app, make_client
@@ -458,7 +459,7 @@ class TestThreadGetState:
         # Mock langgraph service and agent
         mock_agent = AsyncMock()
 
-        mock_snapshot = Mock()
+        mock_snapshot = Mock(spec=StateSnapshot)
         mock_snapshot.values = {"messages": ["hello"]}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
@@ -498,7 +499,7 @@ class TestThreadUpdateState:
 
         mock_agent = AsyncMock()
 
-        mock_snapshot = Mock()
+        mock_snapshot = Mock(spec=StateSnapshot)
         mock_snapshot.values = {"key": "val"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
@@ -641,7 +642,7 @@ class TestThreadStateCheckpoint:
 
         mock_agent = AsyncMock()
 
-        mock_snapshot = Mock()
+        mock_snapshot = Mock(spec=StateSnapshot)
         mock_snapshot.values = {"foo": "bar"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []
@@ -717,7 +718,7 @@ class TestThreadStateCheckpointPost:
 
         mock_agent = AsyncMock()
 
-        mock_snapshot = Mock()
+        mock_snapshot = Mock(spec=StateSnapshot)
         mock_snapshot.values = {"foo": "bar"}
         mock_snapshot.next = []
         mock_snapshot.tasks = []

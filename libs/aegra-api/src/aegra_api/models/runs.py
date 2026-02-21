@@ -1,7 +1,7 @@
 """Run-related Pydantic models for Agent Protocol"""
 
 from datetime import datetime
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -33,6 +33,10 @@ class RunCreate(BaseModel):
     on_disconnect: str | None = Field(
         None,
         description="Behavior on client disconnect: 'cancel' (default) or 'continue'.",
+    )
+    on_completion: Literal["delete", "keep"] | None = Field(
+        None,
+        description="Behavior after stateless run completes: 'delete' (default) removes the ephemeral thread, 'keep' preserves it.",
     )
 
     multitask_strategy: str | None = Field(

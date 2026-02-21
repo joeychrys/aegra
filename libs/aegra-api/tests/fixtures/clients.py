@@ -37,8 +37,10 @@ def create_test_app(include_runs: bool = True, include_threads: bool = True) -> 
 
     if include_runs:
         from aegra_api.api import runs as runs_module
+        from aegra_api.api import stateless_runs as stateless_runs_module
 
         app.include_router(runs_module.router)
+        app.include_router(stateless_runs_module.router)
 
     return app
 

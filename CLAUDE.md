@@ -159,6 +159,26 @@ def create_assistant(name, graph_id, config={}, metadata={}, version=1, context=
 - Mock external dependencies (databases, APIs). Prefer `monkeypatch` over `unittest.mock` where possible.
 - **NEVER mark a task as complete without running the tests and confirming they pass.**
 
+#### Test Levels (ALL required unless genuinely not applicable)
+Every new feature or endpoint MUST have tests at **all applicable levels**:
+1. **Unit tests** (`tests/unit/`) — isolated function-level tests with mocked deps (AsyncMock, patch).
+2. **Integration tests** (`tests/integration/`) — HTTP-level via FastAPI TestClient with mocked DB sessions (`DummySessionBase`, `override_session_dependency`). Tests request validation, route logic, status codes. Use `create_test_app()` + `make_client()` from `tests/fixtures/clients.py`.
+3. **E2E tests** (`tests/e2e/`) — real running server + real DB. Use LangGraph SDK client (`get_e2e_client()`) or `httpx.AsyncClient`. Marked `@pytest.mark.e2e`. Use `elog()` and `check_and_skip_if_geo_blocked()` from `tests/e2e/_utils.py`.
+
+Do NOT skip any level unless genuinely not applicable (e.g. pure utility functions don't need E2E).
+
+#### Closing the Loop (Self-Verification)
+After implementing a feature or fixing a bug, **verify the work end-to-end against a real running server**. Don't stop at unit/integration tests — prove it works for real.
+
+1. **Ensure Docker is running** — check with `docker info`. On Windows: `cmd.exe /c start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"` then poll `docker info`. On Mac: `open -a Docker` then poll. Linux: usually already running.
+2. **Start the server** — `docker compose up -d` from repo root. Source code is volume-mounted with hot reload (`--reload`), so code changes are picked up live — no rebuild needed. Only use `--build` when dependencies change (pyproject.toml, Dockerfile). Wait for health: poll `curl -s http://localhost:8000/health` until `{"status":"healthy",...}`. Check `docker compose logs --tail=50` if unhealthy.
+3. **Verify** — choose the right strategy:
+   - **Run E2E tests** (preferred): `uv run --package aegra-api pytest libs/aegra-api/tests/e2e/<test_file>.py -v`
+   - **Direct HTTP** (quick checks): `curl` against `http://localhost:8000/<endpoint>`
+   - **SDK script** (complex flows): write a temporary script using `from langgraph_sdk import get_client; client = get_client(url="http://localhost:8000")`, run it, then delete it
+   - **Custom verification script** (large responses or multi-step flows): write a Python script with `httpx` to call endpoints, parse responses, and assert results, then clean up
+4. **Cleanup** — `docker compose down` when done (unless user wants it kept running).
+
 ### LLM Agent Anti-Patterns (IMPORTANT)
 These rules exist because AI agents repeatedly make these mistakes. Follow them carefully:
 

@@ -50,6 +50,12 @@ class RunBroker(BaseRunBroker):
                 if self.finished.is_set() and self.queue.empty():
                     break
                 continue
+            except (GeneratorExit, asyncio.CancelledError):
+                # Consumer abandoned iteration (e.g. HTTP client disconnected).
+                # Exit cleanly to avoid "athrow(): asynchronous generator is
+                # already running" when the event loop tries to close us while
+                # we're suspended inside asyncio.wait_for().
+                return
 
     def mark_finished(self) -> None:
         """Mark this broker as finished"""

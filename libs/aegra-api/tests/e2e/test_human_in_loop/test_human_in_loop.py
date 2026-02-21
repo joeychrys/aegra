@@ -694,7 +694,10 @@ async def test_human_in_loop_streaming_interrupt_resume_e2e():
     thread_id = thread["thread_id"]
     assistant_id = assistant["assistant_id"]
 
-    # Phase 1: Stream until interrupt
+    # Phase 1: Stream until interrupt.
+    # Let the stream exhaust naturally instead of breaking early — breaking
+    # abandons the SDK async generator mid-iteration which triggers
+    # "RuntimeError: generator didn't stop after athrow()".
     elog("Phase 1: Stream until interrupt", {"starting": True})
     stream = client.runs.stream(
         thread_id=thread_id,
@@ -714,14 +717,14 @@ async def test_human_in_loop_streaming_interrupt_resume_e2e():
 
         # Look for interrupt in values events
         if (
-            event_type == "values"
+            not interrupt_detected
+            and event_type == "values"
             and isinstance(data, dict)
             and "__interrupt__" in data
             and len(data.get("__interrupt__", [])) > 0
         ):
             interrupt_detected = True
             elog("✅ Interrupt detected in stream!", {"event_count": event_count})
-            break
 
         if event_count > 50:  # Safety limit
             break
@@ -745,13 +748,13 @@ async def test_human_in_loop_streaming_interrupt_resume_e2e():
 
     assert initial_run_id is not None, "Expected to find run_id in thread history"
 
-    # Phase 2: Verify interrupted state
-    interrupted_run = await client.runs.get(thread_id, initial_run_id)
-    assert interrupted_run["status"] == "interrupted"
+    # Phase 2: Verify interrupted state (wait for server-side run to settle)
+    interrupted_run = await wait_for_run_settle(client, thread_id, initial_run_id)
+    assert interrupted_run["status"] == "interrupted", f"Expected 'interrupted', got '{interrupted_run['status']}'"
     elog("✅ Run interrupted", {"run_id": initial_run_id})
 
     # Phase 3: Stream resume command
-    elog("Phase 2: Stream resume", {"starting": True})
+    elog("Phase 3: Stream resume", {"starting": True})
     resume_stream = client.runs.stream(
         thread_id=thread_id,
         assistant_id=assistant_id,

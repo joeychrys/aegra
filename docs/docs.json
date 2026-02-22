@@ -72,18 +72,10 @@
               "guides/observability",
               "guides/deployment"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "openapi": "openapi.json"
-      },
-      {
-        "tab": "Reference",
-        "groups": [
+          },
           {
-            "group": "Configuration",
+            "group": "Reference",
+            "icon": "file-lines",
             "pages": [
               "reference/configuration",
               "reference/cli",
@@ -91,6 +83,10 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "API Reference",
+        "openapi": "openapi.json"
       }
     ]
   },

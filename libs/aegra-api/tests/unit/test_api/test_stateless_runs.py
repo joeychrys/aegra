@@ -345,6 +345,27 @@ class TestStatelessWaitForRun:
 
         mock_delete.assert_called_once_with("eph-thread-3", mock_user.identity)
 
+    @pytest.mark.asyncio
+    async def test_cleanup_failure_does_not_mask_original_error(self, mock_user: User, mock_session: AsyncMock) -> None:
+        """If _delete_thread_by_id raises during cleanup, the original error propagates."""
+        request = RunCreate(assistant_id="agent", input={"msg": "hi"})
+
+        with (
+            patch("aegra_api.api.stateless_runs.uuid4", return_value="eph-thread-err"),
+            patch(
+                "aegra_api.api.stateless_runs.wait_for_run",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("original"),
+            ),
+            patch(
+                "aegra_api.api.stateless_runs._delete_thread_by_id",
+                new_callable=AsyncMock,
+                side_effect=OSError("cleanup failed"),
+            ),
+            pytest.raises(RuntimeError, match="original"),
+        ):
+            await stateless_wait_for_run(request, mock_user, mock_session)
+
 
 class TestStatelessStreamRun:
     """Tests for POST /runs/stream."""
@@ -431,6 +452,63 @@ class TestStatelessStreamRun:
         assert result is mock_response
         mock_delete.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_cleans_up_thread_when_delegation_raises(self, mock_user: User, mock_session: AsyncMock) -> None:
+        """Thread is deleted if create_and_stream_run raises (e.g. assistant not found)."""
+        request = RunCreate(assistant_id="agent", input={"msg": "hi"})
+
+        with (
+            patch("aegra_api.api.stateless_runs.uuid4", return_value="eph-thread-err"),
+            patch(
+                "aegra_api.api.stateless_runs.create_and_stream_run",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("setup failed"),
+            ),
+            patch(
+                "aegra_api.api.stateless_runs._delete_thread_by_id",
+                new_callable=AsyncMock,
+            ) as mock_delete,
+            pytest.raises(RuntimeError, match="setup failed"),
+        ):
+            await stateless_stream_run(request, mock_user, mock_session)
+
+        mock_delete.assert_called_once_with("eph-thread-err", mock_user.identity)
+
+    @pytest.mark.asyncio
+    async def test_stream_cleanup_failure_is_logged_not_raised(self, mock_user: User, mock_session: AsyncMock) -> None:
+        """If _delete_thread_by_id raises during stream cleanup, it is logged but not propagated."""
+        request = RunCreate(assistant_id="agent", input={"msg": "hi"})
+
+        async def _fake_body() -> AsyncIterator[str]:
+            yield "event: data\n\n"
+
+        mock_response = StreamingResponse(
+            _fake_body(),
+            media_type="text/event-stream",
+        )
+
+        with (
+            patch("aegra_api.api.stateless_runs.uuid4", return_value="eph-thread-cleanup"),
+            patch(
+                "aegra_api.api.stateless_runs.create_and_stream_run",
+                new_callable=AsyncMock,
+                return_value=mock_response,
+            ),
+            patch(
+                "aegra_api.api.stateless_runs._delete_thread_by_id",
+                new_callable=AsyncMock,
+                side_effect=OSError("cleanup failed"),
+            ),
+        ):
+            result = await stateless_stream_run(request, mock_user, mock_session)
+
+            # Consuming the iterator should not raise despite cleanup failure
+            chunks: list[str] = []
+            async for chunk in result.body_iterator:
+                chunks.append(chunk)
+
+            assert len(chunks) > 0
+
 
 class TestStatelessCreateRun:
     """Tests for POST /runs."""
@@ -508,3 +586,25 @@ class TestStatelessCreateRun:
 
         assert result.run_id == run_id
         mock_create_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cleans_up_thread_when_delegation_raises(self, mock_user: User, mock_session: AsyncMock) -> None:
+        """Thread is deleted if create_run raises after auto-creating the thread."""
+        request = RunCreate(assistant_id="agent", input={"msg": "hi"})
+
+        with (
+            patch("aegra_api.api.stateless_runs.uuid4", return_value="eph-thread-err"),
+            patch(
+                "aegra_api.api.stateless_runs.create_run",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("create failed"),
+            ),
+            patch(
+                "aegra_api.api.stateless_runs._delete_thread_by_id",
+                new_callable=AsyncMock,
+            ) as mock_delete,
+            pytest.raises(RuntimeError, match="create failed"),
+        ):
+            await stateless_create_run(request, mock_user, mock_session)
+
+        mock_delete.assert_called_once_with("eph-thread-err", mock_user.identity)

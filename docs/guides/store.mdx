@@ -131,3 +131,21 @@ results = await client.store.search_items(
 ## Using the store in graphs
 
 Your agents can access the store within graph nodes via LangGraph's built-in store injection. Items stored via the API are available to the graph, and vice versa.
+
+```python
+from langgraph.store.base import BaseStore
+
+
+def my_node(state, *, store: BaseStore):
+    """The store is automatically injected by LangGraph."""
+    # Read from the store
+    items = store.search(("users", state["user_id"], "preferences"))
+    prefs = items[0].value if items else {}
+
+    # Write to the store
+    store.put(("users", state["user_id"], "history"), key="last_query", value={"q": state["query"]})
+
+    return {"preferences": prefs}
+```
+
+Add the node to your graph as usual — LangGraph injects the `store` parameter automatically when the graph is compiled with a store backend (which Aegra provides).

@@ -18,9 +18,8 @@ Human-in-the-loop (HITL) lets you pause agent execution at specific points to ge
 ### Define a graph with an approval gate
 
 ```python
-from langgraph_sdk import interrupt
 from langgraph.graph import StateGraph
-from langgraph.types import Command
+from langgraph.types import Command, interrupt
 
 
 def human_approval(state):
@@ -112,7 +111,7 @@ async def main():
 
     # Check thread status
     thread_state = await client.threads.get_state(thread["thread_id"])
-    print(f"Status: interrupted")
+    print(f"Status: {thread_state.get('status', 'unknown')}")
     print(f"Interrupts: {thread_state['interrupts']}")
 
 

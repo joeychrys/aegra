@@ -61,12 +61,12 @@ from langgraph_sdk import get_client
 async def main():
     client = get_client(url="http://localhost:8000")
 
-    assistant = await client.assistants.create(graph_id="agent")
+    # Each graph in aegra.json gets a default assistant with the same ID
     thread = await client.threads.create()
 
     async for chunk in client.runs.stream(
         thread_id=thread["thread_id"],
-        assistant_id=assistant["assistant_id"],
+        assistant_id="agent",
         input={"messages": [{"type": "human", "content": "Hello!"}]},
     ):
         print(chunk)

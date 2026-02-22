@@ -54,7 +54,7 @@ assistant = await client.assistants.create(
 
 ```python
 # List all assistants
-assistants = await client.assistants.list()
+assistants = await client.assistants.search()
 
 # Search by graph ID
 results = await client.assistants.search(graph_id="agent")

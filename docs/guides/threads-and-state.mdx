@@ -129,7 +129,7 @@ threads = await client.threads.search(
 ## Listing threads
 
 ```python
-threads = await client.threads.list()
+threads = await client.threads.search()
 for thread in threads:
     print(f"{thread['thread_id']}: {thread['status']}")
 ```
@@ -146,7 +146,7 @@ await client.threads.delete(thread_id)
 
 Threads automatically track metadata about their usage:
 
-- `owner`: User who created the thread
+- `owner`: User identity at creation time (mirrors `user_id` on the Thread object, which is used for access control)
 - `assistant_id`: Last assistant used
 - `graph_id`: Last graph executed
 

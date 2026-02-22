@@ -56,6 +56,8 @@ async for chunk in client.runs.stream(
 Interrupts work transparently across subgraph boundaries. If a subgraph calls `interrupt()`, the parent run pauses and the client receives the interrupt payload. Resuming the run continues execution inside the subgraph.
 
 ```python
+from langgraph.types import interrupt
+
 # Subgraph with an interrupt
 def approval_node(state):
     response = interrupt({"action": "approve_purchase", "amount": state["amount"]})

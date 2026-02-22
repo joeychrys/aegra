@@ -641,6 +641,8 @@ class TestGetAssistantSchemas:
     def test_get_assistant_schemas(self, client, mock_assistant_service):
         """Test getting assistant schemas"""
         schemas = {
+            "input_schema": {"type": "object", "properties": {}},
+            "output_schema": {"type": "object", "properties": {}},
             "config_schema": {"type": "object", "properties": {}},
             "state_schema": {"type": "object", "properties": {}},
         }
@@ -650,6 +652,8 @@ class TestGetAssistantSchemas:
 
         assert resp.status_code == 200
         data = resp.json()
+        assert "input_schema" in data
+        assert "output_schema" in data
         assert "config_schema" in data
         assert "state_schema" in data
 

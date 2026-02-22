@@ -25,17 +25,21 @@ class AssistantCreate(BaseModel):
 class Assistant(BaseModel):
     """Assistant entity model"""
 
-    assistant_id: str
-    name: str
-    description: str | None = None
-    config: dict[str, Any] = Field(default_factory=dict)
-    context: dict[str, Any] = Field(default_factory=dict)
-    graph_id: str
-    user_id: str
+    assistant_id: str = Field(..., description="Unique identifier for the assistant.")
+    name: str = Field(..., description="Human-readable name of the assistant.")
+    description: str | None = Field(None, description="Optional description of the assistant's purpose.")
+    config: dict[str, Any] = Field(default_factory=dict, description="Configuration passed to the graph at runtime.")
+    context: dict[str, Any] = Field(
+        default_factory=dict, description="Context variables available to the graph during execution."
+    )
+    graph_id: str = Field(..., description="Identifier of the graph this assistant executes.")
+    user_id: str = Field(..., description="Identifier of the user who owns this assistant.")
     version: int = Field(..., description="The version of the assistant.")
-    metadata: dict[str, Any] = Field(default_factory=dict, alias="metadata_dict")
-    created_at: datetime
-    updated_at: datetime
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, alias="metadata_dict", description="Arbitrary metadata for searching and filtering."
+    )
+    created_at: datetime = Field(..., description="Timestamp when the assistant was created.")
+    updated_at: datetime = Field(..., description="Timestamp when the assistant was last updated.")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

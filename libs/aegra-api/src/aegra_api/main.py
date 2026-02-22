@@ -37,6 +37,15 @@ from aegra_api.utils.setup_logging import setup_logging
 # Task management for run cancellation
 active_runs: dict[str, asyncio.Task] = {}
 
+# OpenAPI tag metadata shown in /docs and exported spec
+OPENAPI_TAGS: list[dict[str, str]] = [
+    {"name": "Assistants", "description": "Create and manage configured instances of your graphs."},
+    {"name": "Threads", "description": "Manage conversations, state, and checkpoints."},
+    {"name": "Runs", "description": "Execute agents and stream results."},
+    {"name": "Store", "description": "Persistent key-value and semantic storage."},
+    {"name": "Health", "description": "Server health checks and service information."},
+]
+
 setup_logging()
 logger = structlog.getLogger(__name__)
 
@@ -273,6 +282,8 @@ def create_app() -> FastAPI:
             )
 
         application = user_app
+        if not application.openapi_tags:
+            application.openapi_tags = OPENAPI_TAGS
         _include_core_routers(application)
 
         # Add root endpoint if not already defined
@@ -295,6 +306,7 @@ def create_app() -> FastAPI:
             docs_url="/docs",
             redoc_url="/redoc",
             lifespan=lifespan,
+            openapi_tags=OPENAPI_TAGS,
         )
 
         _add_common_middleware(application, cors_config)

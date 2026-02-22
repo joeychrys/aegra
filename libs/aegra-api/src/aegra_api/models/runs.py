@@ -97,18 +97,22 @@ class Run(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    run_id: str
-    thread_id: str
-    assistant_id: str
-    status: str = "pending"  # Valid values: pending, running, error, success, timeout, interrupted
-    input: dict[str, Any]
-    output: dict[str, Any] | None = None
-    error_message: str | None = None
-    config: dict[str, Any] | None = {}
-    context: dict[str, Any] | None = {}
-    user_id: str
-    created_at: datetime
-    updated_at: datetime
+    run_id: str = Field(..., description="Unique identifier for the run.")
+    thread_id: str = Field(..., description="Thread this run belongs to.")
+    assistant_id: str = Field(..., description="Assistant that is executing this run.")
+    status: str = Field(
+        "pending", description="Current run status: pending, running, error, success, timeout, or interrupted."
+    )
+    input: dict[str, Any] = Field(..., description="Input data provided to the run.")
+    output: dict[str, Any] | None = Field(
+        None, description="Final output produced by the run, or null if not yet complete."
+    )
+    error_message: str | None = Field(None, description="Error message if the run failed.")
+    config: dict[str, Any] | None = Field({}, description="Configuration passed to the graph at runtime.")
+    context: dict[str, Any] | None = Field({}, description="Context variables available during execution.")
+    user_id: str = Field(..., description="Identifier of the user who owns this run.")
+    created_at: datetime = Field(..., description="Timestamp when the run was created.")
+    updated_at: datetime = Field(..., description="Timestamp when the run was last updated.")
 
     @field_validator("status", mode="before")
     @classmethod
@@ -122,7 +126,7 @@ class Run(BaseModel):
 class RunStatus(BaseModel):
     """Simple run status response"""
 
-    run_id: str
-    status: str  # Standard status value
+    run_id: str = Field(..., description="Unique identifier for the run.")
+    status: str = Field(..., description="Current run status value.")
 
-    message: str | None = None
+    message: str | None = Field(None, description="Optional human-readable status message.")

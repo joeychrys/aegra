@@ -16,13 +16,18 @@ from aegra_api.models import (
     StoreSearchResponse,
     User,
 )
+from aegra_api.models.errors import NOT_FOUND
 
 router = APIRouter(tags=["Store"], dependencies=auth_dependency)
 
 
 @router.put("/store/items")
 async def put_store_item(request: StorePutRequest, user: User = Depends(get_current_user)) -> dict[str, str]:
-    """Store an item in the LangGraph store"""
+    """Create or update an item in the store.
+
+    If an item with the same namespace and key already exists, its value is
+    overwritten. Values must be JSON objects (dictionaries).
+    """
     # Authorization check
     ctx = build_auth_context(user, "store", "put")
     value = request.model_dump()
@@ -47,13 +52,18 @@ async def put_store_item(request: StorePutRequest, user: User = Depends(get_curr
     return {"status": "stored"}
 
 
-@router.get("/store/items", response_model=StoreGetResponse)
+@router.get("/store/items", response_model=StoreGetResponse, responses={**NOT_FOUND})
 async def get_store_item(
-    key: str,
-    namespace: str | list[str] | None = Query(None),
+    key: str = Query(..., description="Key of the item to retrieve."),
+    namespace: str | list[str] | None = Query(
+        None, description="Namespace path. Use dot-separated string or repeated query params."
+    ),
     user: User = Depends(get_current_user),
 ) -> StoreGetResponse:
-    """Get an item from the LangGraph store"""
+    """Get an item from the store by key.
+
+    Returns 404 if no item exists at the given namespace and key.
+    """
     # Authorization check
     ctx = build_auth_context(user, "store", "get")
     value = {"key": key, "namespace": namespace}
@@ -91,14 +101,14 @@ async def get_store_item(
 @router.delete("/store/items")
 async def delete_store_item(
     body: StoreDeleteRequest | None = None,
-    key: str | None = Query(None),
-    namespace: list[str] | None = Query(None),
+    key: str | None = Query(None, description="Key of the item to delete (query param alternative)."),
+    namespace: list[str] | None = Query(None, description="Namespace path (query param alternative)."),
     user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    """Delete an item from the LangGraph store.
+    """Delete an item from the store.
 
-    Compatible with SDK which sends JSON body {namespace, key}.
-    Also accepts query params for manual usage.
+    Accepts parameters via JSON body (`namespace` + `key`) or query
+    parameters. The JSON body takes precedence when both are provided.
     """
     # Determine source of parameters
     ns = None
@@ -138,7 +148,11 @@ async def delete_store_item(
 async def search_store_items(
     request: StoreSearchRequest, user: User = Depends(get_current_user)
 ) -> StoreSearchResponse:
-    """Search items in the LangGraph store"""
+    """Search items in the store.
+
+    Filter items by namespace prefix, key-value metadata filters, or semantic
+    query. Results are paginated via `limit` and `offset`.
+    """
     # Authorization check
     ctx = build_auth_context(user, "store", "search")
     value = request.model_dump()
@@ -183,7 +197,11 @@ async def list_namespaces(
     request: StoreListNamespacesRequest,
     user: User = Depends(get_current_user),
 ) -> StoreListNamespacesResponse:
-    """List namespaces in the LangGraph store"""
+    """List namespaces in the store.
+
+    Returns the namespace paths that contain items. Filter by prefix, suffix,
+    or maximum depth.
+    """
     # Authorization check
     ctx = build_auth_context(user, "store", "search")
     value = request.model_dump()

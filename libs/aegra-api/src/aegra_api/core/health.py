@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from aegra_api import __version__
 from aegra_api.core.database import db_manager
 
 router = APIRouter(tags=["Health"])
@@ -35,7 +36,7 @@ async def info(_request: Request) -> InfoResponse:
     """Simple service information endpoint"""
     return InfoResponse(
         name="Aegra",
-        version="0.1.0",
+        version=__version__,
         description="Production-ready Agent Protocol server built on LangGraph",
         status="running",
         flags={"assistants": True, "crons": False},

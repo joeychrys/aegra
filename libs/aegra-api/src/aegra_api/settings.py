@@ -4,6 +4,8 @@ from typing import Annotated
 from pydantic import BeforeValidator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from aegra_api import __version__
+
 
 def parse_lower(v: str) -> str:
     """Converts to lowercase and strips whitespace."""
@@ -30,7 +32,7 @@ class AppSettings(EnvBase):
     """General application settings."""
 
     PROJECT_NAME: str = "Aegra"
-    VERSION: str = "0.1.0"
+    VERSION: str = __version__
 
     # Server config
     HOST: str = "0.0.0.0"  # nosec B104

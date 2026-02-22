@@ -26,6 +26,34 @@ jobs:
       - name: Lint with ruff
         run: uvx ruff check .
 
+  openapi-spec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install workspace dependencies
+        run: uv sync --all-packages
+
+      - name: Regenerate OpenAPI spec
+        run: uv run --package aegra-api python scripts/export_openapi.py
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet docs/openapi.json; then
+            echo "::error::docs/openapi.json is out of date. Run 'make openapi' and commit the result."
+            git diff docs/openapi.json
+            exit 1
+          fi
+
   test-api:
     runs-on: ubuntu-latest
     timeout-minutes: 10

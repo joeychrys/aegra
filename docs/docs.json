@@ -61,17 +61,11 @@
       },
       {
         "tab": "API Reference",
+        "openapi": "openapi.json"
+      },
+      {
+        "tab": "Reference",
         "groups": [
-          {
-            "group": "Endpoints",
-            "pages": [
-              "reference/api-assistants",
-              "reference/api-threads",
-              "reference/api-runs",
-              "reference/api-store",
-              "reference/api-health"
-            ]
-          },
           {
             "group": "Configuration",
             "pages": [

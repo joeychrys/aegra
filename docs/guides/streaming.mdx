@@ -45,7 +45,7 @@ Control what data you receive by setting `stream_mode` on the run. You can pass 
 | `debug` | Checkpoint and task result events (auto-enabled on all streams) |
 
 <Note>
-  `debug` mode is automatically added to every stream — you don't need to request it explicitly. `updates` mode is also added internally to detect interrupt events for human-in-the-loop support.
+  `debug` and `updates` are used internally on every stream for checkpoint tracking and interrupt detection, but their events are **only sent to the client if you explicitly request them** in `stream_mode`. When `updates` is not requested, only interrupt events (human-in-the-loop) are forwarded — remapped as `values` events for compatibility.
 </Note>
 
 ### Custom streaming

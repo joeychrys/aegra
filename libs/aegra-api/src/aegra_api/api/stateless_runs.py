@@ -7,6 +7,7 @@ explicitly sets ``on_completion="keep"``).
 """
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
@@ -125,7 +126,13 @@ async def stateless_wait_for_run(
         return result
     finally:
         if should_delete:
-            await _delete_thread_by_id(thread_id, user.identity)
+            try:
+                await _delete_thread_by_id(thread_id, user.identity)
+            except Exception:
+                logger.exception(
+                    "Failed to delete ephemeral thread after wait",
+                    thread_id=thread_id,
+                )
 
 
 @router.post("/runs/stream")
@@ -152,14 +159,22 @@ async def stateless_stream_run(
     original_iterator = response.body_iterator
 
     async def _wrapped_iterator() -> AsyncIterator[str | bytes]:
-        try:
-            async for chunk in original_iterator:
-                yield chunk
-        finally:
-            await _delete_thread_by_id(thread_id, user.identity)
+        async with contextlib.aclosing(original_iterator) as stream:
+            try:
+                async for chunk in stream:
+                    yield chunk
+            finally:
+                try:
+                    await _delete_thread_by_id(thread_id, user.identity)
+                except Exception:
+                    logger.exception(
+                        "Failed to delete ephemeral thread after stream",
+                        thread_id=thread_id,
+                    )
 
     return StreamingResponse(
         _wrapped_iterator(),
+        status_code=response.status_code,
         media_type=response.media_type,
         headers=dict(response.headers),
     )

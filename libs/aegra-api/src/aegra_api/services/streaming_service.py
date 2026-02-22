@@ -1,7 +1,6 @@
 """Streaming service for orchestrating SSE streaming"""
 
 import asyncio
-import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -262,21 +261,18 @@ class StreamingService:
         if run.status in ["success", "error", "interrupted"] and broker.is_finished():
             return
 
-        # Stream live events.  Wrap broker.aiter() in aclosing() so the
-        # async generator is explicitly closed when the consumer disconnects
-        # (prevents "athrow(): asynchronous generator is already running").
+        # Stream live events
         if broker:
-            async with contextlib.aclosing(broker.aiter()) as aiter_gen:
-                async for event_id, raw_event in aiter_gen:
-                    # Skip duplicates that were already replayed
-                    current_sequence = self._extract_event_sequence(event_id)
-                    if current_sequence <= last_sent_sequence:
-                        continue
+            async for event_id, raw_event in broker.aiter():
+                # Skip duplicates that were already replayed
+                current_sequence = self._extract_event_sequence(event_id)
+                if current_sequence <= last_sent_sequence:
+                    continue
 
-                    sse_event = await self._convert_raw_to_sse(event_id, raw_event)
-                    if sse_event:
-                        yield sse_event
-                        last_sent_sequence = current_sequence
+                sse_event = await self._convert_raw_to_sse(event_id, raw_event)
+                if sse_event:
+                    yield sse_event
+                    last_sent_sequence = current_sequence
 
     def _cancel_background_task(self, run_id: str) -> bool:
         """Cancel the asyncio task for a run.
@@ -338,7 +334,7 @@ class StreamingService:
             logger.error(f"Error cancelling run {run_id}: {e}")
             return False
 
-    async def _update_run_status(self, run_id: str, status: str, output: Any = None, error: str | None = None) -> None:
+    async def _update_run_status(self, run_id: str, status: str, output: Any = None, error: str = None):
         """Update run status in database using the shared updater."""
         try:
             # Lazy import to avoid cycles

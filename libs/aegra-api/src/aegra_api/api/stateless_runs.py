@@ -150,7 +150,20 @@ async def stateless_stream_run(
     thread_id = str(uuid4())
     should_delete = request.on_completion != "keep"
 
-    response = await create_and_stream_run(thread_id, request, user, session)
+    try:
+        response = await create_and_stream_run(thread_id, request, user, session)
+    except Exception:
+        # create_and_stream_run may have auto-created the thread via
+        # update_thread_metadata before raising; clean up to avoid orphans.
+        if should_delete:
+            try:
+                await _delete_thread_by_id(thread_id, user.identity)
+            except Exception:
+                logger.exception(
+                    "Failed to delete ephemeral thread after stream setup error",
+                    thread_id=thread_id,
+                )
+        raise
 
     if not should_delete:
         return response
@@ -195,7 +208,20 @@ async def stateless_create_run(
     thread_id = str(uuid4())
     should_delete = request.on_completion != "keep"
 
-    result = await create_run(thread_id, request, user, session)
+    try:
+        result = await create_run(thread_id, request, user, session)
+    except Exception:
+        # create_run may have auto-created the thread via
+        # update_thread_metadata before raising; clean up to avoid orphans.
+        if should_delete:
+            try:
+                await _delete_thread_by_id(thread_id, user.identity)
+            except Exception:
+                logger.exception(
+                    "Failed to delete ephemeral thread after create error",
+                    thread_id=thread_id,
+                )
+        raise
 
     if should_delete:
         task = asyncio.create_task(_cleanup_after_background_run(result.run_id, thread_id, user.identity))

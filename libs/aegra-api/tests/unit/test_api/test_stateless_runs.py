@@ -120,6 +120,98 @@ class TestDeleteThreadById:
 
         mock_session.delete.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_handles_cancelled_error_on_task_await(self, mock_session: AsyncMock) -> None:
+        """CancelledError from awaiting a cancelled task is silently absorbed."""
+        thread_id = str(uuid4())
+        user_id = "test-user"
+        run_id = str(uuid4())
+
+        active_run = RunORM(
+            run_id=run_id,
+            thread_id=thread_id,
+            user_id=user_id,
+            status="running",
+            input={},
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [active_run]
+        mock_session.scalars.return_value = mock_scalars
+        mock_session.scalar.return_value = None
+
+        mock_maker = MagicMock()
+        mock_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        # Use a Future that raises CancelledError when awaited
+        fut = asyncio.get_event_loop().create_future()
+        fut.cancel()
+
+        mock_task = MagicMock()
+        mock_task.done.return_value = False
+        mock_task.cancel.return_value = None
+        mock_task.__await__ = fut.__await__
+
+        with (
+            patch("aegra_api.api.stateless_runs._get_session_maker", return_value=mock_maker),
+            patch(
+                "aegra_api.api.stateless_runs.streaming_service.cancel_run",
+                new_callable=AsyncMock,
+            ),
+            patch("aegra_api.api.stateless_runs.active_runs", {run_id: mock_task}),
+        ):
+            # Should not raise — CancelledError is caught
+            await _delete_thread_by_id(thread_id, user_id)
+
+    @pytest.mark.asyncio
+    async def test_logs_exception_on_task_await_error(self, mock_session: AsyncMock) -> None:
+        """Generic exception from awaiting a task is logged but not re-raised."""
+        thread_id = str(uuid4())
+        user_id = "test-user"
+        run_id = str(uuid4())
+
+        active_run = RunORM(
+            run_id=run_id,
+            thread_id=thread_id,
+            user_id=user_id,
+            status="running",
+            input={},
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [active_run]
+        mock_session.scalars.return_value = mock_scalars
+        mock_session.scalar.return_value = None
+
+        mock_maker = MagicMock()
+        mock_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        # Use a Future that raises RuntimeError when awaited
+        fut = asyncio.get_event_loop().create_future()
+        fut.set_exception(RuntimeError("task exploded"))
+
+        mock_task = MagicMock()
+        mock_task.done.return_value = False
+        mock_task.cancel.return_value = None
+        mock_task.__await__ = fut.__await__
+
+        with (
+            patch("aegra_api.api.stateless_runs._get_session_maker", return_value=mock_maker),
+            patch(
+                "aegra_api.api.stateless_runs.streaming_service.cancel_run",
+                new_callable=AsyncMock,
+            ),
+            patch("aegra_api.api.stateless_runs.active_runs", {run_id: mock_task}),
+        ):
+            # Should not raise — exception is logged
+            await _delete_thread_by_id(thread_id, user_id)
+
 
 class TestCleanupAfterBackgroundRun:
     """Tests for the _cleanup_after_background_run helper."""
@@ -151,6 +243,24 @@ class TestCleanupAfterBackgroundRun:
             await _cleanup_after_background_run(run_id, thread_id, user_id)
 
         assert task_awaited
+        mock_delete.assert_called_once_with(thread_id, user_id)
+
+    @pytest.mark.asyncio
+    async def test_deletes_thread_when_no_task_in_active_runs(self) -> None:
+        """Cleanup proceeds directly to thread deletion when run_id is not in active_runs."""
+        run_id = str(uuid4())
+        thread_id = str(uuid4())
+        user_id = "test-user"
+
+        with (
+            patch("aegra_api.api.stateless_runs.active_runs", {}),
+            patch(
+                "aegra_api.api.stateless_runs._delete_thread_by_id",
+                new_callable=AsyncMock,
+            ) as mock_delete,
+        ):
+            await _cleanup_after_background_run(run_id, thread_id, user_id)
+
         mock_delete.assert_called_once_with(thread_id, user_id)
 
 

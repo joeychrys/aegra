@@ -82,15 +82,14 @@ async for chunk in client.runs.stream(
 
 ## 🔥 Why Aegra?
 
-| Feature | LangSmith Deployments | Aegra |
+| | LangSmith Deployments | Aegra |
 |:--|:--|:--|
-| **Free tier** | 1 seat, 50 runs/mo, community support | Unlimited (self-hosted) |
-| **Paid tier** | From $39/seat/mo + $0.005/run | None — self-host for free |
-| **Enterprise / self-host** | Custom pricing, contact sales | Apache 2.0, always self-hosted |
-| **Data residency** | LangChain cloud (or Enterprise VPC) | Your infrastructure |
-| **Authentication** | Dashboard-configured | Custom handlers (JWT/OAuth/Firebase) |
+| **Cost** | Free tier (1 seat, 50 runs/mo); Plus from $39/seat/mo + $0.005/run; Enterprise custom | Free forever (self-hosted, Apache 2.0) |
+| **Data residency** | LangChain cloud (Enterprise: your VPC) | Your infrastructure |
+| **Authentication** | Dashboard-configured | Custom Python handlers (JWT/OAuth/Firebase) |
 | **Database** | Managed, no BYO | Bring your own Postgres |
 | **Tracing** | LangSmith | Any OTLP backend (Langfuse, Phoenix, etc.) |
+| **Self-hosted option** | Enterprise only | Always |
 | **SDK** | LangGraph SDK | Same LangGraph SDK |
 
 *Based on [LangChain pricing](https://www.langchain.com/pricing) as of February 2026.*

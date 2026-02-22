@@ -8,9 +8,9 @@
   },
   "favicon": "/images/favicon.svg",
   "colors": {
-    "primary": "#6366f1",
-    "light": "#818cf8",
-    "dark": "#4f46e5"
+    "primary": "#f97316",
+    "light": "#fb923c",
+    "dark": "#ea580c"
   },
   "appearance": {
     "default": "dark"

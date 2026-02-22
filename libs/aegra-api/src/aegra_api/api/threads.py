@@ -117,7 +117,7 @@ async def create_thread(
     request: ThreadCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> Thread:
     """Create a new conversation thread.
 
     Threads hold conversation state and checkpoint history. Provide a
@@ -132,12 +132,14 @@ async def create_thread(
 
     # If handler modified metadata, update request
     if filters and "metadata" in filters:
-        current_metadata = request.metadata or {}
-        request.metadata = {**current_metadata, **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
     elif value.get("metadata"):
         # Handler may have modified value dict directly
-        current_metadata = request.metadata or {}
-        request.metadata = {**current_metadata, **value["metadata"]}
+        handler_meta = value["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
 
     thread_id = request.thread_id or str(uuid4())
 
@@ -182,7 +184,9 @@ async def create_thread(
 
 
 @router.get("/threads", response_model=ThreadList)
-async def list_threads(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+async def list_threads(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> ThreadList:
     """List all threads owned by the authenticated user.
 
     Returns every thread without filtering. Use the search endpoint for
@@ -213,7 +217,7 @@ async def get_thread(
     thread_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> Thread:
     """Get a thread by its ID.
 
     Returns 404 if the thread does not exist or does not belong to the
@@ -238,7 +242,7 @@ async def update_thread(
     request: ThreadUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> Thread:
     """Update a thread's metadata.
 
     Merges the provided metadata with the existing metadata (shallow merge).
@@ -250,9 +254,13 @@ async def update_thread(
 
     # If handler modified metadata, update request
     if filters and "metadata" in filters:
-        request.metadata = {**(request.metadata or {}), **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
     elif value.get("metadata"):
-        request.metadata = {**(request.metadata or {}), **value["metadata"]}
+        handler_meta = value["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
 
     stmt = select(ThreadORM).where(ThreadORM.thread_id == thread_id, ThreadORM.user_id == user.identity)
     thread = await session.scalar(stmt)
@@ -280,7 +288,7 @@ async def get_thread_state(
     checkpoint_ns: str | None = Query(None, description="Checkpoint namespace to scope lookup"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> ThreadState:
     """Get the current state of a thread.
 
     Returns the latest checkpoint's values, pending next nodes, interrupt
@@ -375,7 +383,7 @@ async def update_thread_state(
     request: ThreadStateUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> ThreadState | ThreadStateUpdateResponse:
     """Update thread state or retrieve it via POST.
 
     When `values` is provided, creates a new checkpoint with the updated state.
@@ -509,7 +517,7 @@ async def get_thread_state_at_checkpoint(
     checkpoint_ns: str | None = Query(None, description="Checkpoint namespace to scope lookup"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> ThreadState:
     """Get the thread state at a specific checkpoint.
 
     Use this to inspect historical state at any point in the thread's
@@ -583,7 +591,7 @@ async def get_thread_state_at_checkpoint_post(
     request: ThreadCheckpointPostRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> ThreadState:
     """Get the thread state at a specific checkpoint (POST variant).
 
     Identical to the GET checkpoint endpoint but accepts the checkpoint
@@ -614,7 +622,7 @@ async def get_thread_history_post(
     request: ThreadHistoryRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ThreadState]:
     """Get the checkpoint history for a thread (POST variant).
 
     Returns a list of past states ordered from newest to oldest. Use `limit`
@@ -701,7 +709,7 @@ async def get_thread_history_get(
     metadata: str | None = Query(None, description="JSON-encoded metadata filter"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ThreadState]:
     """Get the checkpoint history for a thread.
 
     Returns a list of past states ordered from newest to oldest. Use `limit`
@@ -731,7 +739,7 @@ async def delete_thread(
     thread_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> dict[str, str]:
     """Delete a thread by its ID.
 
     Permanently removes the thread and its metadata. Any active runs on the
@@ -777,7 +785,7 @@ async def search_threads(
     request: ThreadSearchRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[Thread]:
     """Search threads with filters.
 
     Filter by status or metadata key-value pairs. Results are paginated via
@@ -793,7 +801,9 @@ async def search_threads(
     # so we merge authorization filters into metadata if needed
     if filters and "metadata" in filters:
         # If filters contain metadata, merge with request metadata
-        request.metadata = {**(request.metadata or {}), **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
         # Other filter types can be handled here if needed
     stmt = select(ThreadORM).where(ThreadORM.user_id == user.identity)
 

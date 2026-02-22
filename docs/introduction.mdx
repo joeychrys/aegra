@@ -5,6 +5,50 @@ description: "Self-hosted Agent Protocol server. Your infrastructure, your rules
 
 Aegra is an open-source, self-hosted Agent Protocol server that lets you run AI agents on your own infrastructure. It's a drop-in replacement for LangGraph Platform — same SDK, same APIs, no vendor lock-in. Read [why teams choose Aegra](/why-aegra) over managed platforms, or jump straight to the [migration guide](/migration) if you're switching from LangSmith Deployments.
 
+## Before you begin
+
+<Tip>
+  **Using an AI coding tool?** Add the Aegra docs MCP server for better results when building with Aegra.
+</Tip>
+
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add --transport http aegra-docs https://docs.aegra.dev/mcp
+    ```
+  </Tab>
+  <Tab title="Cursor">
+    Add to your `.cursor/mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "aegra-docs": {
+          "url": "https://docs.aegra.dev/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="VS Code">
+    Add to your `.vscode/mcp.json`:
+
+    ```json
+    {
+      "servers": {
+        "aegra-docs": {
+          "type": "http",
+          "url": "https://docs.aegra.dev/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="llms.txt">
+    Feed `https://docs.aegra.dev/llms.txt` to any LLM for full docs context.
+  </Tab>
+</Tabs>
+
 ## What Aegra does
 
 Aegra gives you a production-ready server for running LangGraph agents with full persistence, streaming, and authentication. You bring your own PostgreSQL database and keep complete control over your data.

@@ -28,6 +28,23 @@
   "navigation": {
     "tabs": [
       {
+        "tab": "Getting started",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "introduction",
+              "why-aegra",
+              "quickstart",
+              "installation",
+              "getting-started",
+              "migration",
+              "feature-support"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Guides",
         "groups": [
           {
@@ -74,20 +91,6 @@
               "reference/environment-variables"
             ]
           }
-        ]
-      }
-    ],
-    "groups": [
-      {
-        "group": "Getting started",
-        "pages": [
-          "introduction",
-          "why-aegra",
-          "quickstart",
-          "installation",
-          "getting-started",
-          "migration",
-          "feature-support"
         ]
       }
     ]

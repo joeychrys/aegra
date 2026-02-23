@@ -3,7 +3,7 @@
   "info": {
     "title": "Aegra",
     "description": "Production-ready Agent Protocol server",
-    "version": "0.7.2"
+    "version": "0.7.3"
   },
   "paths": {
     "/info": {
@@ -970,7 +970,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete Thread Threads  Thread Id  Delete"
+                }
               }
             }
           },
@@ -1112,7 +1118,17 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ThreadState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ThreadStateUpdateResponse"
+                    }
+                  ],
+                  "title": "Response Update Thread State Threads  Thread Id  State Post"
+                }
               }
             }
           },
@@ -2009,7 +2025,7 @@
           "Thread Runs"
         ],
         "summary": "Join Run",
-        "description": "Wait for a run to complete and return its output.\n\nIf the run is already in a terminal state (success, error, interrupted),\nthe output is returned immediately. Otherwise the server waits up to 30\nseconds for the background task to finish.",
+        "description": "Wait for a run to complete and return its output.\n\nIf the run is already in a terminal state (success, error, interrupted),\nthe output is returned immediately. Otherwise the server waits up to 30\nseconds for the background task to finish.\n\nSessions are managed manually (not via Depends) to avoid holding a pool\nconnection during the long wait, which would starve background tasks.",
         "operationId": "join_run_threads__thread_id__runs__run_id__join_get",
         "parameters": [
           {
@@ -2073,7 +2089,7 @@
           "Thread Runs"
         ],
         "summary": "Wait For Run",
-        "description": "Create a run, execute it, and wait for completion.\n\nCombines run creation and execution with synchronous waiting. Returns the\nfinal output directly (not the Run object). The server waits up to 5\nminutes for the run to finish. If the run times out, the current output\n(which may be empty) is returned.",
+        "description": "Create a run, execute it, and wait for completion.\n\nCombines run creation and execution with synchronous waiting. Returns the\nfinal output directly (not the Run object). The server waits up to 5\nminutes for the run to finish. If the run times out, the current output\n(which may be empty) is returned.\n\nSessions are managed manually (not via Depends) to avoid holding a pool\nconnection during the long wait, which would starve background tasks.",
         "operationId": "wait_for_run_threads__thread_id__runs_wait_post",
         "parameters": [
           {
@@ -2560,7 +2576,7 @@
           "Store"
         ],
         "summary": "Get Store Item",
-        "description": "Get an item from the store by key.\n\nReturns 400 if no item exists at the given namespace and key.",
+        "description": "Get an item from the store by key.\n\nReturns 404 if no item exists at the given namespace and key.",
         "operationId": "get_store_item_store_items_get",
         "parameters": [
           {
@@ -2612,6 +2628,16 @@
           },
           "400": {
             "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProtocolError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -3413,8 +3439,7 @@
               }
             ],
             "title": "Config",
-            "description": "Configuration passed to the graph at runtime.",
-            "default": {}
+            "description": "Configuration passed to the graph at runtime."
           },
           "context": {
             "anyOf": [
@@ -3427,8 +3452,7 @@
               }
             ],
             "title": "Context",
-            "description": "Context variables available during execution.",
-            "default": {}
+            "description": "Context variables available during execution."
           },
           "user_id": {
             "type": "string",
@@ -3492,8 +3516,7 @@
               }
             ],
             "title": "Config",
-            "description": "Execution config",
-            "default": {}
+            "description": "Execution config"
           },
           "context": {
             "anyOf": [
@@ -3506,8 +3529,7 @@
               }
             ],
             "title": "Context",
-            "description": "Execution context",
-            "default": {}
+            "description": "Execution context"
           },
           "checkpoint": {
             "anyOf": [
@@ -4548,6 +4570,22 @@
         "type": "object",
         "title": "ThreadStateUpdate",
         "description": "Request model for updating thread state"
+      },
+      "ThreadStateUpdateResponse": {
+        "properties": {
+          "checkpoint": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Checkpoint",
+            "description": "The checkpoint that was created/updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint"
+        ],
+        "title": "ThreadStateUpdateResponse",
+        "description": "Response model for thread state update"
       },
       "ThreadUpdate": {
         "properties": {

@@ -2,7 +2,7 @@
 
 Aegra API - Self-hosted Agent Protocol server.
 
-Aegra is an open-source, self-hosted alternative to LangGraph Platform. This package provides the core API server that implements the Agent Protocol, allowing you to run AI agents on your own infrastructure without vendor lock-in.
+Aegra is an open-source, self-hosted alternative to LangSmith Deployments. This package provides the core API server that implements the Agent Protocol, allowing you to run AI agents on your own infrastructure without vendor lock-in.
 
 ## Features
 

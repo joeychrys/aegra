@@ -4,10 +4,10 @@ This file provides context for AI coding agents working with this repository.
 
 ## Project Overview
 
-**Aegra** is an open-source, self-hosted alternative to LangGraph Platform. It's a production-ready Agent Protocol server that allows you to run AI agents on your own infrastructure without vendor lock-in.
+**Aegra** is an open-source, self-hosted alternative to LangSmith Deployments. It's a production-ready Agent Protocol server that allows you to run AI agents on your own infrastructure without vendor lock-in.
 
 **Key characteristics:**
-- Drop-in replacement for LangGraph Platform using the same LangGraph SDK
+- Drop-in replacement for LangSmith Deployments using the same LangGraph SDK
 - Self-hosted on your own PostgreSQL database
 - Agent Protocol compliant (works with Agent Chat UI, LangGraph Studio, CopilotKit)
 - Python 3.12+ with FastAPI and PostgreSQL

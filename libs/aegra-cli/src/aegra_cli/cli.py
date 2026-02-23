@@ -37,7 +37,7 @@ except ImportError:
 def cli():
     """Aegra CLI - Manage your self-hosted agent deployments.
 
-    Aegra is an open-source, self-hosted alternative to LangGraph Platform.
+    Aegra is an open-source, self-hosted alternative to LangSmith Deployments.
     Use this CLI to run development servers, manage Docker services, and more.
     """
     pass

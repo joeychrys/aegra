@@ -10,6 +10,7 @@ from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute, APIRouter
 
 from aegra_api.api.assistants import router as assistants_router
 from aegra_api.api.runs import router as runs_router
@@ -36,6 +37,15 @@ from aegra_api.utils.setup_logging import setup_logging
 
 # Task management for run cancellation
 active_runs: dict[str, asyncio.Task] = {}
+
+OPENAPI_TAGS: list[dict[str, Any]] = [
+    {"name": "Assistants", "description": "A configured instance of a graph."},
+    {"name": "Threads", "description": "Accumulated state and outputs from a group of runs."},
+    {"name": "Thread Runs", "description": "Invoke a graph on a thread, updating its persistent state."},
+    {"name": "Stateless Runs", "description": "Invoke a graph without state or memory persistence."},
+    {"name": "Store", "description": "Persistent key-value and semantic storage available from any thread."},
+    {"name": "Health", "description": "Server health checks and service information."},
+]
 
 setup_logging()
 logger = structlog.getLogger(__name__)
@@ -152,7 +162,6 @@ def _apply_auth_to_routes(app: FastAPI, auth_deps: list[Any]) -> None:
         app: FastAPI application instance
         auth_deps: List of dependencies to apply (e.g., [Depends(require_auth)])
     """
-    from fastapi.routing import APIRoute, APIRouter
 
     def process_routes(routes: list) -> None:
         """Recursively process routes and nested routers."""
@@ -180,15 +189,25 @@ def _apply_auth_to_routes(app: FastAPI, auth_deps: list[Any]) -> None:
 def _add_cors_middleware(app: FastAPI, cors_config: dict[str, Any] | None) -> None:
     """Add CORS middleware with config or defaults.
 
+    When ``allow_origins`` is ``["*"]`` (the default), ``allow_credentials``
+    defaults to ``False`` because the combination of a wildcard origin with
+    credentials is insecure — it allows any site to make credentialed requests.
+    To enable ``allow_credentials``, specify concrete origins.
+
     Args:
         app: FastAPI application instance
         cors_config: CORS configuration dict or None for defaults
     """
     if cors_config:
+        origins = cors_config.get("allow_origins", ["*"])
+        credentials = cors_config.get(
+            "allow_credentials",
+            origins not in (["*"], "*"),
+        )
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=cors_config.get("allow_origins", ["*"]),
-            allow_credentials=cors_config.get("allow_credentials", True),
+            allow_origins=origins,
+            allow_credentials=credentials,
             allow_methods=cors_config.get("allow_methods", ["*"]),
             allow_headers=cors_config.get("allow_headers", ["*"]),
             expose_headers=cors_config.get("expose_headers", DEFAULT_EXPOSE_HEADERS),
@@ -198,7 +217,7 @@ def _add_cors_middleware(app: FastAPI, cors_config: dict[str, Any] | None) -> No
         app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
-            allow_credentials=True,
+            allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
             expose_headers=DEFAULT_EXPOSE_HEADERS,
@@ -273,6 +292,8 @@ def create_app() -> FastAPI:
             )
 
         application = user_app
+        if not application.openapi_tags:
+            application.openapi_tags = OPENAPI_TAGS
         _include_core_routers(application)
 
         # Add root endpoint if not already defined
@@ -295,6 +316,7 @@ def create_app() -> FastAPI:
             docs_url="/docs",
             redoc_url="/redoc",
             lifespan=lifespan,
+            openapi_tags=OPENAPI_TAGS,
         )
 
         _add_common_middleware(application, cors_config)

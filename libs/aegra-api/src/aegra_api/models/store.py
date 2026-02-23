@@ -28,9 +28,9 @@ class StorePutRequest(BaseModel):
 class StoreGetResponse(BaseModel):
     """Response model for getting items"""
 
-    key: str
-    value: Any
-    namespace: list[str]
+    key: str = Field(..., description="The item's key within its namespace.")
+    value: Any = Field(..., description="The stored value.")
+    namespace: list[str] = Field(..., description="The namespace path where this item is stored.")
 
 
 class StoreSearchRequest(BaseModel):
@@ -46,9 +46,9 @@ class StoreSearchRequest(BaseModel):
 class StoreItem(BaseModel):
     """Store item model"""
 
-    key: str
-    value: Any
-    namespace: list[str]
+    key: str = Field(..., description="The item's key within its namespace.")
+    value: Any = Field(..., description="The stored value.")
+    namespace: list[str] = Field(..., description="The namespace path where this item is stored.")
 
 
 class StoreSearchResponse(BaseModel):
@@ -63,8 +63,8 @@ class StoreSearchResponse(BaseModel):
 class StoreDeleteRequest(BaseModel):
     """Request body for deleting store items (SDK-compatible)."""
 
-    namespace: list[str]
-    key: str
+    namespace: list[str] = Field(..., description="Namespace path of the item to delete.")
+    key: str = Field(..., description="Key of the item to delete.")
 
 
 class StoreListNamespacesRequest(BaseModel):

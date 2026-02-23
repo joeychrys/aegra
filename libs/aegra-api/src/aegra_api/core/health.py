@@ -3,11 +3,12 @@
 import contextlib
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from aegra_api import __version__
 from aegra_api.core.database import db_manager
+from aegra_api.models.errors import UNAVAILABLE
 
 router = APIRouter(tags=["Health"])
 
@@ -15,25 +16,29 @@ router = APIRouter(tags=["Health"])
 class HealthResponse(BaseModel):
     """Health check response model"""
 
-    status: str
-    database: str
-    langgraph_checkpointer: str
-    langgraph_store: str
+    status: str = Field(..., description="Overall health status: 'healthy' or 'unhealthy'.")
+    database: str = Field(..., description="PostgreSQL connection status.")
+    langgraph_checkpointer: str = Field(..., description="Checkpoint backend connection status.")
+    langgraph_store: str = Field(..., description="Store backend connection status.")
 
 
 class InfoResponse(BaseModel):
     """Info endpoint response model"""
 
-    name: str
-    version: str
-    description: str
-    status: str
-    flags: dict
+    name: str = Field(..., description="Service name.")
+    version: str = Field(..., description="Current server version.")
+    description: str = Field(..., description="Service description.")
+    status: str = Field(..., description="Current service status.")
+    flags: dict = Field(..., description="Feature flags indicating available capabilities.")
 
 
 @router.get("/info", response_model=InfoResponse)
 async def info(_request: Request) -> InfoResponse:
-    """Simple service information endpoint"""
+    """Get service information.
+
+    Returns the server name, version, and feature flags. This endpoint does
+    not require authentication.
+    """
     return InfoResponse(
         name="Aegra",
         version=__version__,
@@ -43,9 +48,13 @@ async def info(_request: Request) -> InfoResponse:
     )
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health_check(_request: Request) -> dict[str, str]:
-    """Core health check handler logic"""
+@router.get("/health", response_model=HealthResponse, responses={**UNAVAILABLE})
+async def health_check(_request: Request) -> HealthResponse:
+    """Check the health of all server components.
+
+    Verifies connectivity to PostgreSQL, the checkpoint backend, and the
+    store backend. Returns 503 if any component is unhealthy.
+    """
     health_status = {
         "status": "healthy",
         "database": "unknown",
@@ -90,12 +99,16 @@ async def health_check(_request: Request) -> dict[str, str]:
     if health_status["status"] == "unhealthy":
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
-    return health_status
+    return HealthResponse(**health_status)
 
 
-@router.get("/ready")
+@router.get("/ready", responses={**UNAVAILABLE})
 async def readiness_check(_request: Request) -> dict[str, str]:
-    """Kubernetes readiness probe endpoint"""
+    """Kubernetes readiness probe.
+
+    Returns 200 when the server can accept traffic (database and graph
+    backends are initialized). Returns 503 otherwise.
+    """
     # Engine must exist and respond to a trivial query
     if not db_manager.engine:
         raise HTTPException(
@@ -128,5 +141,9 @@ async def readiness_check(_request: Request) -> dict[str, str]:
 
 @router.get("/live")
 async def liveness_check(_request: Request) -> dict[str, str]:
-    """Kubernetes liveness probe endpoint"""
+    """Kubernetes liveness probe.
+
+    Always returns 200 to indicate the process is alive. Does not check
+    backend connectivity.
+    """
     return {"status": "alive"}

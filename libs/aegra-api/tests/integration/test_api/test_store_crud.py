@@ -42,8 +42,8 @@ class TestPutStoreItem:
             },
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "stored"
+        assert resp.status_code == 204
+        assert resp.content == b""
         mock_store.aput.assert_called_once()
 
     def test_put_item_with_empty_namespace(self, client, mock_store):
@@ -57,7 +57,7 @@ class TestPutStoreItem:
             },
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # Should use default user namespace
         mock_store.aput.assert_called_once()
         call_args = mock_store.aput.call_args
@@ -81,8 +81,7 @@ class TestPutStoreItem:
             },
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "stored"
+        assert resp.status_code == 204
 
     def test_put_item_rejects_array_value(self, client, mock_store):
         """Test that array values are rejected"""
@@ -224,16 +223,16 @@ class TestDeleteStoreItem:
             json={"namespace": ["test", "ns"], "key": "test-key"},
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.status_code == 204
+        assert resp.content == b""
         mock_store.adelete.assert_called_once()
 
     def test_delete_item_with_query_params(self, client, mock_store):
         """Test deleting item via query parameters"""
         resp = client.delete("/store/items?key=test-key")
 
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.status_code == 204
+        assert resp.content == b""
         mock_store.adelete.assert_called_once()
 
     def test_delete_item_missing_key(self, client, mock_store):
@@ -251,8 +250,8 @@ class TestDeleteStoreItem:
             json={"namespace": ["custom", "namespace"], "key": "test-key"},
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.status_code == 204
+        assert resp.content == b""
 
 
 class TestSearchStoreItems:
@@ -577,7 +576,7 @@ class TestNamespaceScoping:
             },
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # Verify the namespace was scoped to the user
         call_args = mock_store.aput.call_args
         namespace = call_args.kwargs["namespace"]
@@ -611,7 +610,7 @@ class TestStoreIntegration:
                 "value": {"stage": "initial"},
             },
         )
-        assert put_resp.status_code == 200
+        assert put_resp.status_code == 204
 
         # 2. Mock getting it back
         mock_item = DummyStoreItem(
@@ -631,7 +630,7 @@ class TestStoreIntegration:
             "/store/items",
             json={"namespace": ["workflow"], "key": "lifecycle-key"},
         )
-        assert delete_resp.status_code == 200
+        assert delete_resp.status_code == 204
 
     def test_search_after_multiple_puts(self, client, mock_store):
         """Test searching after storing multiple items"""
@@ -645,7 +644,7 @@ class TestStoreIntegration:
                     "value": {"index": i},
                 },
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 204
 
         # Mock search results
         mock_results = [DummyStoreItem(f"item-{i}", {"index": i}, ("batch",)) for i in range(3)]

@@ -5,7 +5,7 @@
 <h1 align="center">Aegra</h1>
 
 <p align="center">
-  <strong>Self-hosted LangGraph Platform alternative. Your infrastructure, your rules.</strong>
+  <strong>Self-hosted LangSmith Deployments alternative. Your infrastructure, your rules.</strong>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ---
 
-Aegra is a drop-in replacement for LangGraph Platform. Use the same LangGraph SDK, same APIs, but run it on your own infrastructure with PostgreSQL persistence.
+Aegra is a drop-in replacement for LangSmith Deployments. Use the same LangGraph SDK, same APIs, but run it on your own infrastructure with PostgreSQL persistence.
 
 **Works with:** [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) | [LangGraph Studio](https://github.com/langchain-ai/langgraph-studio) | [AG-UI / CopilotKit](https://github.com/CopilotKit/CopilotKit)
 
@@ -82,26 +82,28 @@ async for chunk in client.runs.stream(
 
 ## 🔥 Why Aegra?
 
-| Feature | LangGraph Platform | Aegra |
+*Based on [LangChain pricing](https://www.langchain.com/pricing) as of February 2026. An enterprise tier with self-hosting is also available at custom pricing.*
+
+| | LangSmith Deployments | Aegra |
 |:--|:--|:--|
-| **Cost** | $$$+ per month | Free (self-hosted) |
-| **Data Control** | Third-party hosted | Your infrastructure |
-| **Vendor Lock-in** | High dependency | Zero lock-in |
-| **Authentication** | Limited options | Custom (JWT/OAuth/Firebase) |
-| **Database** | Managed, no BYO | Bring your own Postgres |
-| **Tracing** | LangSmith only | Your choice (Langfuse, etc.) |
-| **SDK Compatibility** | LangGraph SDK | Same LangGraph SDK |
+| **Deploy agents** | Local dev only (Free), paid cloud (Plus) | Free, unlimited |
+| **Custom auth** | Not available (Free), available (Plus) | Python handlers (JWT/OAuth/Firebase) |
+| **Self-hosted** | Enterprise only (license key required) | Always (Apache 2.0) |
+| **Own database** | Managed only (Free/Plus), bring your own (Enterprise) | Bring your own Postgres |
+| **Tracing** | LangSmith only | Any OTLP backend (Langfuse, Phoenix, etc.) |
+| **Data residency** | LangChain cloud (Free/Plus), your infrastructure (Enterprise) | Your infrastructure |
+| **SDK** | LangGraph SDK | Same LangGraph SDK |
 
 ## ✨ Features
 
 - **[Agent Protocol](https://github.com/langchain-ai/agent-protocol) compliant** - Works with Agent Chat UI, LangGraph Studio, CopilotKit
-- **[Human-in-the-loop](docs/developer-guide.md)** - Approval gates and user intervention points
-- **[Streaming](docs/developer-guide.md)** - Real-time responses with network resilience
-- **[Persistent state](docs/developer-guide.md)** - PostgreSQL checkpoints via LangGraph
-- **[Configurable auth](docs/developer-guide.md)** - JWT, OAuth, Firebase, or none
-- **[Unified Observability](docs/observability.md)** - Fan-out tracing support via OpenTelemetry
-- **[Semantic store](docs/semantic-store.md)** - Vector embeddings with pgvector
-- **[Custom routes](docs/custom-routes.md)** - Add your own FastAPI endpoints
+- **[Human-in-the-loop](https://docs.aegra.dev/guides/human-in-the-loop)** - Approval gates and user intervention points
+- **[Streaming](https://docs.aegra.dev/guides/streaming)** - Real-time responses with network resilience
+- **[Persistent state](https://docs.aegra.dev/guides/threads-and-state)** - PostgreSQL checkpoints via LangGraph
+- **[Configurable auth](https://docs.aegra.dev/guides/authentication)** - JWT, OAuth, Firebase, or none
+- **[Unified Observability](https://docs.aegra.dev/guides/observability)** - Fan-out tracing support via OpenTelemetry
+- **[Semantic store](https://docs.aegra.dev/guides/semantic-store)** - Vector embeddings with pgvector
+- **[Custom routes](https://docs.aegra.dev/guides/custom-routes)** - Add your own FastAPI endpoints
 
 ## 🛠️ CLI Commands
 
@@ -119,18 +121,18 @@ aegra version           # Show version info
 
 ## 📚 Documentation
 
+**[docs.aegra.dev](https://docs.aegra.dev)** — Full documentation with guides, API reference, and configuration.
+
 | Topic | Description |
 |-------|-------------|
-| [Configuration](docs/configuration.md) | aegra.json format and environment variables |
-| [Developer Guide](docs/developer-guide.md) | Local setup, migrations, development workflow |
-| [Authentication & Authorization](docs/authentication.md) | Configure JWT, OAuth, or custom auth with fine-grained access control |
-| [Custom Routes](docs/custom-routes.md) | Add your own FastAPI endpoints |
-| [Semantic Store](docs/semantic-store.md) | Vector embeddings with pgvector |
-| [Dependencies](docs/dependencies.md) | Shared modules for graph imports |
-| [Observability & Tracing](docs/observability.md) | Configure Langfuse, Phoenix, and generic OTLP exporters |
-| [Production Setup](docs/production-docker-setup.md) | Docker deployment for production |
-
-> ⚠️ **Upgrading from an older version?** See the [PostgreSQL 18 Migration Guide](docs/postgres-18-migration.md).
+| [Quickstart](https://docs.aegra.dev/quickstart) | Get a running server in under 5 minutes |
+| [Configuration](https://docs.aegra.dev/reference/configuration) | aegra.json format and all options |
+| [Authentication](https://docs.aegra.dev/guides/authentication) | JWT, OAuth, Firebase, or custom auth handlers |
+| [Streaming](https://docs.aegra.dev/guides/streaming) | 8 SSE stream modes with reconnection |
+| [Store](https://docs.aegra.dev/guides/store) | Key-value and semantic search storage |
+| [Observability](https://docs.aegra.dev/guides/observability) | Fan-out tracing to Langfuse, Phoenix, or any OTLP backend |
+| [Deployment](https://docs.aegra.dev/guides/deployment) | Docker, PaaS, and Kubernetes deployment |
+| [Migration](https://docs.aegra.dev/migration) | Migrate from LangSmith Deployments |
 
 ## 💬 Community & Support
 
@@ -148,7 +150,7 @@ aegra version           # Show version info
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) and check out [good first issues](https://github.com/ibbybuilds/aegra/labels/good%20first%20issue).
+We welcome contributions! See [Contributing guide](https://docs.aegra.dev/guides/contributing) and check out [good first issues](https://github.com/ibbybuilds/aegra/labels/good%20first%20issue).
 
 ## 💖 Support the Project
 

@@ -2,7 +2,7 @@
 
 Aegra CLI - Command-line interface for managing self-hosted agent deployments.
 
-Aegra is an open-source, self-hosted alternative to LangGraph Platform. Use this CLI to initialize projects, run development servers, and manage Docker services.
+Aegra is an open-source, self-hosted alternative to LangSmith Deployments. Use this CLI to initialize projects, run development servers, and manage Docker services.
 
 ## Installation
 

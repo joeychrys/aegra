@@ -41,12 +41,12 @@ class Thread(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    thread_id: str
-    status: str = "idle"  # Valid values: idle, busy, interrupted, error
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    user_id: str
-    created_at: datetime
-    updated_at: datetime
+    thread_id: str = Field(..., description="Unique identifier for the thread.")
+    status: str = Field("idle", description="Current thread status: idle, busy, interrupted, or error.")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary metadata attached to the thread.")
+    user_id: str = Field(..., description="Identifier of the user who owns this thread.")
+    created_at: datetime = Field(..., description="Timestamp when the thread was created.")
+    updated_at: datetime = Field(..., description="Timestamp when the thread was last updated.")
 
     @field_validator("status", mode="before")
     @classmethod

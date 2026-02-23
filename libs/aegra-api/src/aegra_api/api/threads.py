@@ -32,6 +32,7 @@ from aegra_api.models import (
     ThreadUpdate,
     User,
 )
+from aegra_api.models.errors import CONFLICT, NOT_FOUND
 from aegra_api.services.streaming_service import streaming_service
 from aegra_api.services.thread_state_service import ThreadStateService
 
@@ -111,13 +112,19 @@ def _serialize_thread(thread_orm: ThreadORM, default_metadata: dict[str, Any] | 
 # --- Endpoints ---
 
 
-@router.post("/threads", response_model=Thread)
+@router.post("/threads", response_model=Thread, responses={**CONFLICT})
 async def create_thread(
     request: ThreadCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Create a new conversation thread"""
+) -> Thread:
+    """Create a new conversation thread.
+
+    Threads hold conversation state and checkpoint history. Provide a
+    `thread_id` for idempotent creation, or let the server generate one.
+    Set `if_exists` to `"do_nothing"` to return the existing thread when the
+    ID already exists instead of raising a 409 conflict.
+    """
     # Authorization check
     ctx = build_auth_context(user, "threads", "create")
     value = request.model_dump()
@@ -125,12 +132,14 @@ async def create_thread(
 
     # If handler modified metadata, update request
     if filters and "metadata" in filters:
-        current_metadata = request.metadata or {}
-        request.metadata = {**current_metadata, **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
     elif value.get("metadata"):
         # Handler may have modified value dict directly
-        current_metadata = request.metadata or {}
-        request.metadata = {**current_metadata, **value["metadata"]}
+        handler_meta = value["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
 
     thread_id = request.thread_id or str(uuid4())
 
@@ -175,8 +184,14 @@ async def create_thread(
 
 
 @router.get("/threads", response_model=ThreadList)
-async def list_threads(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    """List user's threads"""
+async def list_threads(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> ThreadList:
+    """List all threads owned by the authenticated user.
+
+    Returns every thread without filtering. Use the search endpoint for
+    filtered queries.
+    """
     # Authorization check (search action for listing)
     ctx = build_auth_context(user, "threads", "search")
     value = {}
@@ -197,13 +212,17 @@ async def list_threads(user: User = Depends(get_current_user), session: AsyncSes
     return ThreadList(threads=user_threads, total=len(user_threads))
 
 
-@router.get("/threads/{thread_id}", response_model=Thread)
+@router.get("/threads/{thread_id}", response_model=Thread, responses={**NOT_FOUND})
 async def get_thread(
     thread_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get thread by ID"""
+) -> Thread:
+    """Get a thread by its ID.
+
+    Returns 404 if the thread does not exist or does not belong to the
+    authenticated user.
+    """
     # Authorization check
     ctx = build_auth_context(user, "threads", "read")
     value = {"thread_id": thread_id}
@@ -217,14 +236,17 @@ async def get_thread(
     return _serialize_thread(thread)
 
 
-@router.patch("/threads/{thread_id}", response_model=Thread)
+@router.patch("/threads/{thread_id}", response_model=Thread, responses={**NOT_FOUND})
 async def update_thread(
     thread_id: str,
     request: ThreadUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Update a thread's metadata and timestamp."""
+) -> Thread:
+    """Update a thread's metadata.
+
+    Merges the provided metadata with the existing metadata (shallow merge).
+    """
     # Authorization check
     ctx = build_auth_context(user, "threads", "update")
     value = {**request.model_dump(), "thread_id": thread_id}
@@ -232,9 +254,13 @@ async def update_thread(
 
     # If handler modified metadata, update request
     if filters and "metadata" in filters:
-        request.metadata = {**(request.metadata or {}), **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
     elif value.get("metadata"):
-        request.metadata = {**(request.metadata or {}), **value["metadata"]}
+        handler_meta = value["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
 
     stmt = select(ThreadORM).where(ThreadORM.thread_id == thread_id, ThreadORM.user_id == user.identity)
     thread = await session.scalar(stmt)
@@ -255,15 +281,20 @@ async def update_thread(
     return _serialize_thread(thread)
 
 
-@router.get("/threads/{thread_id}/state", response_model=ThreadState)
+@router.get("/threads/{thread_id}/state", response_model=ThreadState, responses={**NOT_FOUND})
 async def get_thread_state(
     thread_id: str,
     subgraphs: bool = Query(False, description="Include states from subgraphs"),
     checkpoint_ns: str | None = Query(None, description="Checkpoint namespace to scope lookup"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get state for a thread (i.e. latest checkpoint)"""
+) -> ThreadState:
+    """Get the current state of a thread.
+
+    Returns the latest checkpoint's values, pending next nodes, interrupt
+    data, and metadata. If the thread has no associated graph yet (no runs
+    executed), returns an empty state.
+    """
     try:
         stmt = select(ThreadORM).where(ThreadORM.thread_id == thread_id, ThreadORM.user_id == user.identity)
         thread = await session.scalar(stmt)
@@ -346,14 +377,21 @@ async def get_thread_state(
         raise HTTPException(500, f"Error retrieving thread state: {str(e)}") from e
 
 
-@router.post("/threads/{thread_id}/state")
+@router.post("/threads/{thread_id}/state", responses={**NOT_FOUND})
 async def update_thread_state(
     thread_id: str,
     request: ThreadStateUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Update thread state or get state via POST."""
+) -> ThreadState | ThreadStateUpdateResponse:
+    """Update thread state or retrieve it via POST.
+
+    When `values` is provided, creates a new checkpoint with the updated state.
+    Use `as_node` to attribute the update to a specific graph node. When
+    `values` is null, this endpoint acts as a POST-based alternative to the
+    GET state endpoint (useful when passing complex checkpoint/subgraph
+    parameters in the request body).
+    """
     if request.values is None:
         return await get_thread_state(
             thread_id=thread_id,
@@ -471,7 +509,7 @@ async def update_thread_state(
         raise HTTPException(500, f"Error updating thread state: {str(e)}") from e
 
 
-@router.get("/threads/{thread_id}/state/{checkpoint_id}", response_model=ThreadState)
+@router.get("/threads/{thread_id}/state/{checkpoint_id}", response_model=ThreadState, responses={**NOT_FOUND})
 async def get_thread_state_at_checkpoint(
     thread_id: str,
     checkpoint_id: str,
@@ -479,8 +517,12 @@ async def get_thread_state_at_checkpoint(
     checkpoint_ns: str | None = Query(None, description="Checkpoint namespace to scope lookup"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get thread state at a specific checkpoint"""
+) -> ThreadState:
+    """Get the thread state at a specific checkpoint.
+
+    Use this to inspect historical state at any point in the thread's
+    execution history. Returns 404 if the checkpoint does not exist.
+    """
     try:
         stmt = select(ThreadORM).where(ThreadORM.thread_id == thread_id, ThreadORM.user_id == user.identity)
         thread = await session.scalar(stmt)
@@ -543,14 +585,19 @@ async def get_thread_state_at_checkpoint(
         raise HTTPException(500, f"Error retrieving checkpoint '{checkpoint_id}': {str(e)}") from e
 
 
-@router.post("/threads/{thread_id}/state/checkpoint", response_model=ThreadState)
+@router.post("/threads/{thread_id}/state/checkpoint", response_model=ThreadState, responses={**NOT_FOUND})
 async def get_thread_state_at_checkpoint_post(
     thread_id: str,
     request: ThreadCheckpointPostRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get thread state at a specific checkpoint (POST method)"""
+) -> ThreadState:
+    """Get the thread state at a specific checkpoint (POST variant).
+
+    Identical to the GET checkpoint endpoint but accepts the checkpoint
+    configuration in the request body. Useful when the checkpoint namespace
+    contains characters that are awkward in URL paths.
+    """
     checkpoint = request.checkpoint
     if not checkpoint.checkpoint_id:
         raise HTTPException(400, "checkpoint_id is required in checkpoint configuration")
@@ -569,14 +616,18 @@ async def get_thread_state_at_checkpoint_post(
     return output
 
 
-@router.post("/threads/{thread_id}/history", response_model=list[ThreadState])
+@router.post("/threads/{thread_id}/history", response_model=list[ThreadState], responses={**NOT_FOUND})
 async def get_thread_history_post(
     thread_id: str,
     request: ThreadHistoryRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get thread checkpoint history (POST method)"""
+) -> list[ThreadState]:
+    """Get the checkpoint history for a thread (POST variant).
+
+    Returns a list of past states ordered from newest to oldest. Use `limit`
+    to control how many states are returned and `before` to paginate.
+    """
     try:
         limit = request.limit or 10
         if not isinstance(limit, int) or limit < 1 or limit > 1000:
@@ -648,7 +699,7 @@ async def get_thread_history_post(
         raise HTTPException(500, f"Error retrieving thread history: {str(e)}") from e
 
 
-@router.get("/threads/{thread_id}/history", response_model=list[ThreadState])
+@router.get("/threads/{thread_id}/history", response_model=list[ThreadState], responses={**NOT_FOUND})
 async def get_thread_history_get(
     thread_id: str,
     limit: int = Query(10, ge=1, le=1000, description="Number of states to return"),
@@ -658,8 +709,12 @@ async def get_thread_history_get(
     metadata: str | None = Query(None, description="JSON-encoded metadata filter"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Get thread checkpoint history (GET method)"""
+) -> list[ThreadState]:
+    """Get the checkpoint history for a thread.
+
+    Returns a list of past states ordered from newest to oldest. Use `limit`
+    to control how many states are returned and `before` to paginate.
+    """
     parsed_metadata: dict[str, Any] | None = None
     if metadata:
         try:
@@ -679,13 +734,18 @@ async def get_thread_history_get(
     return await get_thread_history_post(thread_id, req, user, session)
 
 
-@router.delete("/threads/{thread_id}")
+@router.delete("/threads/{thread_id}", responses={**NOT_FOUND})
 async def delete_thread(
     thread_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Delete thread by ID. Automatically cancels active runs."""
+) -> dict[str, str]:
+    """Delete a thread by its ID.
+
+    Permanently removes the thread and its metadata. Any active runs on the
+    thread are automatically cancelled before deletion. Checkpoint history
+    stored in the graph backend is not affected.
+    """
     # Authorization check
     ctx = build_auth_context(user, "threads", "delete")
     value = {"thread_id": thread_id}
@@ -725,8 +785,12 @@ async def search_threads(
     request: ThreadSearchRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
-    """Search threads with filters"""
+) -> list[Thread]:
+    """Search threads with filters.
+
+    Filter by status or metadata key-value pairs. Results are paginated via
+    `limit` and `offset` and ordered by creation time (newest first).
+    """
     # Authorization check
     ctx = build_auth_context(user, "threads", "search")
     value = request.model_dump()
@@ -737,7 +801,9 @@ async def search_threads(
     # so we merge authorization filters into metadata if needed
     if filters and "metadata" in filters:
         # If filters contain metadata, merge with request metadata
-        request.metadata = {**(request.metadata or {}), **filters["metadata"]}
+        handler_meta = filters["metadata"]
+        if isinstance(handler_meta, dict):
+            request.metadata = {**(request.metadata or {}), **handler_meta}
         # Other filter types can be handled here if needed
     stmt = select(ThreadORM).where(ThreadORM.user_id == user.identity)
 

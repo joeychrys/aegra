@@ -24,6 +24,7 @@ from aegra_api.core.orm import _get_session_maker, get_session
 from aegra_api.core.serializers import GeneralSerializer
 from aegra_api.core.sse import create_end_event, get_sse_headers
 from aegra_api.models import Run, RunCreate, RunStatus, User
+from aegra_api.models.errors import CONFLICT, NOT_FOUND, SSE_RESPONSE
 from aegra_api.services.broker import broker_manager
 from aegra_api.services.graph_streaming import stream_graph_events
 from aegra_api.services.langgraph_service import create_run_config, get_langgraph_service
@@ -34,7 +35,7 @@ from aegra_api.utils.run_utils import (
 )
 from aegra_api.utils.status_compat import validate_run_status
 
-router = APIRouter(tags=["Runs"], dependencies=auth_dependency)
+router = APIRouter(tags=["Thread Runs"], dependencies=auth_dependency)
 
 logger = structlog.getLogger(__name__)
 serializer = GeneralSerializer()
@@ -149,14 +150,20 @@ async def _validate_resume_command(session: AsyncSession, thread_id: str, comman
             raise HTTPException(400, "Cannot resume: thread is not in interrupted state")
 
 
-@router.post("/threads/{thread_id}/runs", response_model=Run)
+@router.post("/threads/{thread_id}/runs", response_model=Run, responses={**NOT_FOUND, **CONFLICT})
 async def create_run(
     thread_id: str,
     request: RunCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Run:
-    """Create and execute a new run (persisted)."""
+    """Create and execute a new run.
+
+    Starts graph execution asynchronously and returns the run record
+    immediately with status `pending`. Poll the run or use the stream
+    endpoint to follow progress. Provide either `input` or `command` (for
+    human-in-the-loop resumption) but not both.
+    """
     # Authorization check (create_run action on threads resource)
     ctx = build_auth_context(user, "threads", "create_run")
     value = {**request.model_dump(), "thread_id": thread_id}
@@ -274,14 +281,23 @@ async def create_run(
     return run
 
 
-@router.post("/threads/{thread_id}/runs/stream")
+@router.post("/threads/{thread_id}/runs/stream", responses={**SSE_RESPONSE, **NOT_FOUND, **CONFLICT})
 async def create_and_stream_run(
     thread_id: str,
     request: RunCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    """Create a new run and stream its execution - persisted + SSE."""
+    """Create a new run and stream its execution via SSE.
+
+    Returns a `text/event-stream` response with Server-Sent Events. Each
+    event has a `type` field (e.g. `values`, `updates`, `messages`,
+    `metadata`, `end`) and a JSON `data` payload.
+
+    Set `on_disconnect` to `"continue"` if the run should keep executing
+    after the client disconnects (default is `"cancel"`). Use `stream_mode`
+    to control which event types are emitted.
+    """
 
     # Validate resume command requirements early
     await _validate_resume_command(session, thread_id, request.command)
@@ -409,14 +425,18 @@ async def create_and_stream_run(
     )
 
 
-@router.get("/threads/{thread_id}/runs/{run_id}", response_model=Run)
+@router.get("/threads/{thread_id}/runs/{run_id}", response_model=Run, responses={**NOT_FOUND})
 async def get_run(
     thread_id: str,
     run_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Run:
-    """Get run by ID (persisted)."""
+    """Get a run by its ID.
+
+    Returns the current state of the run including its status, input, output,
+    and error information.
+    """
     # Authorization check (read action on runs resource)
     ctx = build_auth_context(user, "runs", "read")
     value = {"run_id": run_id, "thread_id": thread_id}
@@ -447,11 +467,17 @@ async def list_runs(
     thread_id: str,
     limit: int = Query(10, ge=1, description="Maximum number of runs to return"),
     offset: int = Query(0, ge=0, description="Number of runs to skip for pagination"),
-    status: str | None = Query(None, description="Filter by run status"),
+    status: str | None = Query(
+        None, description="Filter by run status (e.g. pending, running, success, error, interrupted)"
+    ),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[Run]:
-    """List runs for a specific thread (persisted)."""
+    """List runs for a thread.
+
+    Returns runs ordered by creation time (newest first). Use `status` to
+    filter and `limit`/`offset` to paginate.
+    """
     stmt = (
         select(RunORM)
         .where(
@@ -471,7 +497,7 @@ async def list_runs(
     return runs
 
 
-@router.patch("/threads/{thread_id}/runs/{run_id}")
+@router.patch("/threads/{thread_id}/runs/{run_id}", response_model=Run, responses={**NOT_FOUND})
 async def update_run(
     thread_id: str,
     run_id: str,
@@ -479,7 +505,11 @@ async def update_run(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Run:
-    """Update run status (for cancellation/interruption, persisted)."""
+    """Update a run's status.
+
+    Primarily used to interrupt a running execution. Set `status` to
+    `"interrupted"` to cooperatively stop the run.
+    """
     logger.info(f"[update_run] fetch for update run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
@@ -510,20 +540,26 @@ async def update_run(
 
     # Return final run state
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
-    if run_orm:
-        # Refresh to ensure we have the latest data after our own update
-        await session.refresh(run_orm)
+    if not run_orm:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    # Refresh to ensure we have the latest data after our own update
+    await session.refresh(run_orm)
     return Run.model_validate(run_orm)
 
 
-@router.get("/threads/{thread_id}/runs/{run_id}/join")
+@router.get("/threads/{thread_id}/runs/{run_id}/join", responses={**NOT_FOUND})
 async def join_run(
     thread_id: str,
     run_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """Join a run (wait for completion and return final output) - persisted."""
+    """Wait for a run to complete and return its output.
+
+    If the run is already in a terminal state (success, error, interrupted),
+    the output is returned immediately. Otherwise the server waits up to 30
+    seconds for the background task to finish.
+    """
     # Get run and validate it exists
     run_orm = await session.scalar(
         select(RunORM).where(
@@ -558,25 +594,25 @@ async def join_run(
 
     # Return final output from database
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
-    if run_orm:
-        await session.refresh(run_orm)  # Refresh to get latest data from DB
-    output = getattr(run_orm, "output", None) or {}
-    return output
+    if not run_orm:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    await session.refresh(run_orm)  # Refresh to get latest data from DB
+    return run_orm.output or {}
 
 
-@router.post("/threads/{thread_id}/runs/wait")
+@router.post("/threads/{thread_id}/runs/wait", responses={**NOT_FOUND, **CONFLICT})
 async def wait_for_run(
     thread_id: str,
     request: RunCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """Create a run, execute it, and wait for completion (Agent Protocol).
+    """Create a run, execute it, and wait for completion.
 
-    This endpoint combines run creation and execution with synchronous waiting.
-    Returns the final output directly (not the Run object).
-
-    Compatible with LangGraph SDK's runs.wait() method and Agent Protocol spec.
+    Combines run creation and execution with synchronous waiting. Returns the
+    final output directly (not the Run object). The server waits up to 5
+    minutes for the run to finish. If the run times out, the current output
+    (which may be empty) is returned.
     """
     # Validate resume command requirements early
     await _validate_resume_command(session, thread_id, request.command)
@@ -712,16 +748,22 @@ async def wait_for_run(
 
 
 # TODO: check if this method is actually required because the implementation doesn't seem correct.
-@router.get("/threads/{thread_id}/runs/{run_id}/stream")
+@router.get("/threads/{thread_id}/runs/{run_id}/stream", responses={**SSE_RESPONSE, **NOT_FOUND})
 async def stream_run(
     thread_id: str,
     run_id: str,
     last_event_id: str | None = Header(None, alias="Last-Event-ID"),
-    _stream_mode: str | None = Query(None),
+    _stream_mode: str | None = Query(None, description="Override the stream mode for this connection."),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    """Stream run execution with SSE and reconnection support - persisted metadata."""
+    """Stream an existing run's execution via SSE.
+
+    Attach to a run that was created without streaming (e.g. via the create
+    endpoint) to receive its events in real time. If the run has already
+    finished, a single `end` event is emitted. Use the `Last-Event-ID`
+    header to resume from a specific event after a disconnect.
+    """
     logger.info(f"[stream_run] fetch for stream run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
@@ -768,24 +810,29 @@ async def stream_run(
     )
 
 
-@router.post("/threads/{thread_id}/runs/{run_id}/cancel")
+@router.post(
+    "/threads/{thread_id}/runs/{run_id}/cancel",
+    response_model=Run,
+    responses={**NOT_FOUND},
+)
 async def cancel_run_endpoint(
     thread_id: str,
     run_id: str,
-    wait: int = Query(0, ge=0, le=1, description="Whether to wait for the run task to settle"),
-    action: str = Query("cancel", pattern="^(cancel|interrupt)$", description="Cancellation action"),
+    wait: int = Query(0, ge=0, le=1, description="Set to 1 to wait for the run task to settle before returning."),
+    action: str = Query(
+        "cancel",
+        pattern="^(cancel|interrupt)$",
+        description="Cancellation strategy: 'cancel' for hard cancel, 'interrupt' for cooperative interrupt.",
+    ),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Run:
-    """
-    Cancel or interrupt a run (client-compatible endpoint).
+    """Cancel or interrupt a running execution.
 
-    Matches client usage:
-      POST /v1/threads/{thread_id}/runs/{run_id}/cancel?wait=0&action=interrupt
-
-    - action=cancel => hard cancel
-    - action=interrupt => cooperative interrupt if supported
-    - wait=1 => await background task to finish settling
+    Use `action=cancel` to hard-cancel the run immediately, or
+    `action=interrupt` to cooperatively interrupt (the graph can handle the
+    interrupt and save partial state). Set `wait=1` to block until the
+    background task has fully settled before returning the updated run.
     """
     logger.info(f"[cancel_run] fetch run run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
@@ -1046,27 +1093,28 @@ async def update_run_status(
             await session.close()  # type: ignore[func-returns-value]
 
 
-@router.delete("/threads/{thread_id}/runs/{run_id}", status_code=204)
+@router.delete(
+    "/threads/{thread_id}/runs/{run_id}",
+    status_code=204,
+    responses={**NOT_FOUND, **CONFLICT},
+)
 async def delete_run(
     thread_id: str,
     run_id: str,
-    force: int = Query(0, ge=0, le=1, description="Force cancel active run before delete (1=yes)"),
+    force: int = Query(0, ge=0, le=1, description="Set to 1 to cancel an active run before deleting it."),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Delete run by ID"""
+    """Delete a run record.
+
+    If the run is active (pending or running) and `force=0`, returns 409
+    Conflict. Set `force=1` to cancel the run first (best-effort) and then
+    delete it. Returns 204 No Content on success.
+    """
     # Authorization check (delete action on runs resource)
     ctx = build_auth_context(user, "runs", "delete")
     value = {"run_id": run_id, "thread_id": thread_id}
     await handle_event(ctx, value)
-    """
-    Delete a run record.
-
-    Behavior:
-    - If the run is active (pending/running/streaming) and force=0, returns 409 Conflict.
-    - If force=1 and the run is active, cancels it first (best-effort) and then deletes.
-    - Always returns 204 No Content on successful deletion.
-    """
     logger.info(f"[delete_run] fetch run run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(

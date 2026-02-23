@@ -17,7 +17,7 @@ from aegra_api.models import (
     StoreSearchResponse,
     User,
 )
-from aegra_api.models.errors import BAD_REQUEST
+from aegra_api.models.errors import BAD_REQUEST, NOT_FOUND
 
 router = APIRouter(tags=["Store"], dependencies=auth_dependency)
 
@@ -53,7 +53,7 @@ async def put_store_item(request: StorePutRequest, user: User = Depends(get_curr
     return Response(status_code=204)
 
 
-@router.get("/store/items", response_model=StoreGetResponse, responses={**BAD_REQUEST})
+@router.get("/store/items", response_model=StoreGetResponse, responses={**BAD_REQUEST, **NOT_FOUND})
 async def get_store_item(
     key: str = Query(..., description="Key of the item to retrieve."),
     namespace: str | list[str] | None = Query(
@@ -63,7 +63,7 @@ async def get_store_item(
 ) -> StoreGetResponse:
     """Get an item from the store by key.
 
-    Returns 400 if no item exists at the given namespace and key.
+    Returns 404 if no item exists at the given namespace and key.
     """
     # Authorization check
     ctx = build_auth_context(user, "store", "get")
@@ -94,7 +94,7 @@ async def get_store_item(
     item = await store.aget(tuple(scoped_namespace), key)
 
     if not item:
-        raise HTTPException(400, "Item not found")
+        raise HTTPException(404, "Item not found")
 
     return StoreGetResponse(key=key, value=item.value, namespace=list(scoped_namespace))
 

@@ -49,7 +49,7 @@ async def info(_request: Request) -> InfoResponse:
 
 
 @router.get("/health", response_model=HealthResponse, responses={**UNAVAILABLE})
-async def health_check(_request: Request) -> dict[str, str]:
+async def health_check(_request: Request) -> HealthResponse:
     """Check the health of all server components.
 
     Verifies connectivity to PostgreSQL, the checkpoint backend, and the
@@ -99,7 +99,7 @@ async def health_check(_request: Request) -> dict[str, str]:
     if health_status["status"] == "unhealthy":
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
-    return health_status
+    return HealthResponse(**health_status)
 
 
 @router.get("/ready", responses={**UNAVAILABLE})

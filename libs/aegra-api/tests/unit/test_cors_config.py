@@ -7,13 +7,16 @@ where expose_headers was not applied in the non-custom-app code path.
 
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
+from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 
 
-def find_cors_middleware(app):
+def find_cors_middleware(app: FastAPI) -> Middleware | None:
     """Find the CORSMiddleware in the app's middleware stack."""
     for middleware in app.user_middleware:
         if middleware.cls == CORSMiddleware:
@@ -58,7 +61,7 @@ def isolated_module_reload(tmp_path, monkeypatch):
             sys.modules[mod] = module
 
 
-def reload_main_module():
+def reload_main_module() -> types.ModuleType:
     """Clear aegra_api.main and aegra_api.config from cache and reimport main.
 
     Note: We only clear main and config modules. Settings module is NOT cleared

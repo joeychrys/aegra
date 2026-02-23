@@ -540,9 +540,10 @@ async def update_run(
 
     # Return final run state
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
-    if run_orm:
-        # Refresh to ensure we have the latest data after our own update
-        await session.refresh(run_orm)
+    if not run_orm:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    # Refresh to ensure we have the latest data after our own update
+    await session.refresh(run_orm)
     return Run.model_validate(run_orm)
 
 
@@ -593,10 +594,10 @@ async def join_run(
 
     # Return final output from database
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
-    if run_orm:
-        await session.refresh(run_orm)  # Refresh to get latest data from DB
-    output = getattr(run_orm, "output", None) or {}
-    return output
+    if not run_orm:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    await session.refresh(run_orm)  # Refresh to get latest data from DB
+    return run_orm.output or {}
 
 
 @router.post("/threads/{thread_id}/runs/wait", responses={**NOT_FOUND, **CONFLICT})

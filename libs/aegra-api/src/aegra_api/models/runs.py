@@ -22,8 +22,8 @@ class RunCreate(BaseModel):
         None,
         description="Input data for the run. Optional when resuming from a checkpoint.",
     )
-    config: dict[str, Any] | None = Field({}, description="Execution config")
-    context: dict[str, Any] | None = Field({}, description="Execution context")
+    config: dict[str, Any] | None = Field(default_factory=dict, description="Execution config")
+    context: dict[str, Any] | None = Field(default_factory=dict, description="Execution context")
     checkpoint: dict[str, Any] | None = Field(
         None,
         description="Checkpoint configuration (e.g., {'checkpoint_id': '...', 'checkpoint_ns': ''})",
@@ -108,8 +108,12 @@ class Run(BaseModel):
         None, description="Final output produced by the run, or null if not yet complete."
     )
     error_message: str | None = Field(None, description="Error message if the run failed.")
-    config: dict[str, Any] | None = Field({}, description="Configuration passed to the graph at runtime.")
-    context: dict[str, Any] | None = Field({}, description="Context variables available during execution.")
+    config: dict[str, Any] | None = Field(
+        default_factory=dict, description="Configuration passed to the graph at runtime."
+    )
+    context: dict[str, Any] | None = Field(
+        default_factory=dict, description="Context variables available during execution."
+    )
     user_id: str = Field(..., description="Identifier of the user who owns this run.")
     created_at: datetime = Field(..., description="Timestamp when the run was created.")
     updated_at: datetime = Field(..., description="Timestamp when the run was last updated.")

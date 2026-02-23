@@ -10,6 +10,7 @@ from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute, APIRouter
 
 from aegra_api.api.assistants import router as assistants_router
 from aegra_api.api.runs import router as runs_router
@@ -37,7 +38,7 @@ from aegra_api.utils.setup_logging import setup_logging
 # Task management for run cancellation
 active_runs: dict[str, asyncio.Task] = {}
 
-OPENAPI_TAGS: list[dict[str, str]] = [
+OPENAPI_TAGS: list[dict[str, Any]] = [
     {"name": "Assistants", "description": "A configured instance of a graph."},
     {"name": "Threads", "description": "Accumulated state and outputs from a group of runs."},
     {"name": "Thread Runs", "description": "Invoke a graph on a thread, updating its persistent state."},
@@ -161,7 +162,6 @@ def _apply_auth_to_routes(app: FastAPI, auth_deps: list[Any]) -> None:
         app: FastAPI application instance
         auth_deps: List of dependencies to apply (e.g., [Depends(require_auth)])
     """
-    from fastapi.routing import APIRoute, APIRouter
 
     def process_routes(routes: list) -> None:
         """Recursively process routes and nested routers."""
@@ -202,7 +202,7 @@ def _add_cors_middleware(app: FastAPI, cors_config: dict[str, Any] | None) -> No
         origins = cors_config.get("allow_origins", ["*"])
         credentials = cors_config.get(
             "allow_credentials",
-            origins != ["*"],
+            origins not in (["*"], "*"),
         )
         app.add_middleware(
             CORSMiddleware,

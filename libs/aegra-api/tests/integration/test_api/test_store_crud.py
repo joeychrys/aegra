@@ -177,7 +177,7 @@ class TestGetStoreItem:
 
         resp = client.get("/store/items?key=nonexistent")
 
-        assert resp.status_code == 400
+        assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
 
     def test_get_item_with_list_namespace(self, client, mock_store):

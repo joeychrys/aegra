@@ -46,8 +46,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ibbybuilds/aegra"
-Documentation = "https://github.com/ibbybuilds/aegra#readme"
+Homepage = "https://aegra.dev"
+Documentation = "https://docs.aegra.dev"
 Repository = "https://github.com/ibbybuilds/aegra"
 Issues = "https://github.com/ibbybuilds/aegra/issues"
 

@@ -7,6 +7,7 @@ where expose_headers was not applied in the non-custom-app code path.
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
@@ -194,3 +195,90 @@ async def test_cors_expose_headers_defaults_when_not_specified(isolated_module_r
     expose_headers = cors_middleware.kwargs.get("expose_headers", [])
     assert "Content-Location" in expose_headers, "Content-Location should default when not specified in cors config"
     assert "Location" in expose_headers, "Location should default when not specified in cors config"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_default_cors_credentials_false_with_wildcard_origins(isolated_module_reload: Path) -> None:
+    """Test that allow_credentials defaults to False when origins is ["*"].
+
+    Wildcard origins + credentials is insecure: any site could make
+    credentialed requests. The safe default is credentials=False.
+    """
+    tmp_path = isolated_module_reload
+
+    config_file = tmp_path / "aegra.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "graphs": {"test": "./test.py:graph"},
+            }
+        )
+    )
+
+    main = reload_main_module()
+
+    cors_middleware = find_cors_middleware(main.app)
+    assert cors_middleware is not None, "CORS middleware should be present"
+    assert cors_middleware.kwargs.get("allow_credentials") is False, (
+        "allow_credentials should default to False with wildcard origins"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cors_credentials_true_with_concrete_origins(isolated_module_reload: Path) -> None:
+    """Test that allow_credentials defaults to True when concrete origins are set."""
+    tmp_path = isolated_module_reload
+
+    config_file = tmp_path / "aegra.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "graphs": {"test": "./test.py:graph"},
+                "http": {
+                    "cors": {
+                        "allow_origins": ["https://myapp.example.com"],
+                    },
+                },
+            }
+        )
+    )
+
+    main = reload_main_module()
+
+    cors_middleware = find_cors_middleware(main.app)
+    assert cors_middleware is not None, "CORS middleware should be present"
+    assert cors_middleware.kwargs.get("allow_credentials") is True, (
+        "allow_credentials should default to True with concrete origins"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cors_credentials_explicit_override(isolated_module_reload: Path) -> None:
+    """Test that explicit allow_credentials setting overrides the default."""
+    tmp_path = isolated_module_reload
+
+    config_file = tmp_path / "aegra.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "graphs": {"test": "./test.py:graph"},
+                "http": {
+                    "cors": {
+                        "allow_origins": ["*"],
+                        "allow_credentials": True,
+                    },
+                },
+            }
+        )
+    )
+
+    main = reload_main_module()
+
+    cors_middleware = find_cors_middleware(main.app)
+    assert cors_middleware is not None, "CORS middleware should be present"
+    assert cors_middleware.kwargs.get("allow_credentials") is True, (
+        "Explicit allow_credentials=True should override the wildcard default"
+    )

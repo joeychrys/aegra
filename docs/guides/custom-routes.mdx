@@ -120,7 +120,7 @@ Configure CORS for your custom routes in `aegra.json`:
 }
 ```
 
-The default is `allow_origins: ["*"]` with `allow_credentials: true`. Note that browsers reject `allow_origins: ["*"]` when credentials are enabled, so you should specify concrete origins in production when using `allow_credentials: true`.
+The default is `allow_origins: ["*"]` with `allow_credentials: false`. When you specify concrete origins, `allow_credentials` defaults to `true` automatically. You can always set `allow_credentials` explicitly to override the default.
 
 ## Configuration reference
 
@@ -129,4 +129,4 @@ The default is `allow_origins: ["*"]` with `allow_credentials: true`. Note that 
 | `http.app` | `string` | `None` | Import path to custom FastAPI app (`./file.py:variable`) |
 | `http.enable_custom_route_auth` | `bool` | `false` | Apply Aegra auth to all custom routes |
 | `http.cors.allow_origins` | `list[str]` | `["*"]` | Allowed CORS origins |
-| `http.cors.allow_credentials` | `bool` | `true` | Allow credentials in CORS requests |
+| `http.cors.allow_credentials` | `bool` | `false` when origins is `["*"]`, `true` otherwise | Allow credentials in CORS requests |

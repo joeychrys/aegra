@@ -189,15 +189,25 @@ def _apply_auth_to_routes(app: FastAPI, auth_deps: list[Any]) -> None:
 def _add_cors_middleware(app: FastAPI, cors_config: dict[str, Any] | None) -> None:
     """Add CORS middleware with config or defaults.
 
+    When ``allow_origins`` is ``["*"]`` (the default), ``allow_credentials``
+    defaults to ``False`` because the combination of a wildcard origin with
+    credentials is insecure — it allows any site to make credentialed requests.
+    To enable ``allow_credentials``, specify concrete origins.
+
     Args:
         app: FastAPI application instance
         cors_config: CORS configuration dict or None for defaults
     """
     if cors_config:
+        origins = cors_config.get("allow_origins", ["*"])
+        credentials = cors_config.get(
+            "allow_credentials",
+            origins != ["*"],
+        )
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=cors_config.get("allow_origins", ["*"]),
-            allow_credentials=cors_config.get("allow_credentials", True),
+            allow_origins=origins,
+            allow_credentials=credentials,
             allow_methods=cors_config.get("allow_methods", ["*"]),
             allow_headers=cors_config.get("allow_headers", ["*"]),
             expose_headers=cors_config.get("expose_headers", DEFAULT_EXPOSE_HEADERS),
@@ -207,7 +217,7 @@ def _add_cors_middleware(app: FastAPI, cors_config: dict[str, Any] | None) -> No
         app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
-            allow_credentials=True,
+            allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
             expose_headers=DEFAULT_EXPOSE_HEADERS,

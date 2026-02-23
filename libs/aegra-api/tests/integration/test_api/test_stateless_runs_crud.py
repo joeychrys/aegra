@@ -4,7 +4,7 @@ Tests hit the FastAPI routes via TestClient with mocked database sessions,
 verifying HTTP status codes, request validation, and delegation behaviour.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from tests.fixtures.clients import create_test_app, make_client
 from tests.fixtures.database import DummySessionBase
@@ -102,7 +102,6 @@ class TestStatelessWaitForRun:
 
     def test_assistant_not_found(self) -> None:
         """Non-existent assistant → 404."""
-        from unittest.mock import MagicMock
 
         app = create_test_app(include_runs=True, include_threads=False)
 
@@ -134,7 +133,6 @@ class TestStatelessWaitForRun:
 
     def test_on_completion_keep_accepted(self) -> None:
         """on_completion='keep' is accepted without validation error."""
-        from unittest.mock import MagicMock
 
         app = create_test_app(include_runs=True, include_threads=False)
 
@@ -206,8 +204,6 @@ class TestStatelessWaitForRun:
                     rowcount = 1
 
                 return Result()
-
-        from unittest.mock import MagicMock
 
         session_instance = Session()
         ctx = MagicMock()

@@ -1,6 +1,6 @@
 """Integration tests for runs CRUD operations"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from tests.fixtures.clients import create_test_app, make_client
 from tests.fixtures.database import DummySessionBase
@@ -96,6 +96,18 @@ def _run_row(
 
     run.__table__ = _T()
     return run
+
+
+def _make_session_maker(session_instance: DummySessionBase) -> MagicMock:
+    """Return a callable mimicking ``async_sessionmaker``.
+
+    Calling the returned object produces an async context manager that yields
+    *session_instance*, matching the ``async with maker() as session:`` pattern.
+    """
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=session_instance)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=ctx)
 
 
 class TestCreateRun:
@@ -393,24 +405,6 @@ class TestJoinRun:
     so we patch the maker to return a mock async context manager.
     """
 
-    @staticmethod
-    def _make_maker(session_instance: DummySessionBase):
-        """Return a callable whose ``()`` returns an async-context-manager yielding *session_instance*.
-
-        Mimics ``async_sessionmaker`` — calling it produces an ``AsyncSession``
-        usable as ``async with maker() as session:``.
-        """
-        from unittest.mock import MagicMock
-
-        ctx = MagicMock()
-        ctx.__aenter__ = AsyncMock(return_value=session_instance)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-
-        def maker_fn():
-            return ctx
-
-        return maker_fn
-
     def test_join_run_not_found(self):
         """Test joining a non-existent run"""
         app = create_test_app(include_runs=True, include_threads=False)
@@ -422,7 +416,7 @@ class TestJoinRun:
         override_session_dependency(app, BasicSession)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(Session())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(Session())):
             resp = client.get("/threads/test-thread-123/runs/nonexistent/join")
 
         assert resp.status_code == 404
@@ -440,7 +434,7 @@ class TestJoinRun:
         override_session_dependency(app, Session)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(Session())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(Session())):
             resp = client.get("/threads/test-thread-123/runs/test-run-123/join")
 
         assert resp.status_code == 200
@@ -528,16 +522,6 @@ class TestWaitForRun:
     that reach the handler must patch it. Pure-validation tests (422) don't need it.
     """
 
-    @staticmethod
-    def _make_maker(session_instance: DummySessionBase):
-        """Return a callable mimicking ``async_sessionmaker``."""
-        from unittest.mock import MagicMock
-
-        ctx = MagicMock()
-        ctx.__aenter__ = AsyncMock(return_value=session_instance)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        return MagicMock(return_value=ctx)
-
     def test_wait_for_run_validation_no_input(self):
         """Test that wait endpoint requires input or command"""
         app = create_test_app(include_runs=True, include_threads=False)
@@ -565,7 +549,7 @@ class TestWaitForRun:
         override_session_dependency(app, Session)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(Session())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(Session())):
             resp = client.post(
                 "/threads/nonexistent/runs/wait",
                 json={
@@ -595,7 +579,7 @@ class TestWaitForRun:
         override_session_dependency(app, Session)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(Session())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(Session())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -614,7 +598,7 @@ class TestWaitForRun:
         override_session_dependency(app, BasicSession)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(BasicSession())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(BasicSession())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -634,7 +618,7 @@ class TestWaitForRun:
         override_session_dependency(app, BasicSession)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(BasicSession())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(BasicSession())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -654,7 +638,7 @@ class TestWaitForRun:
         override_session_dependency(app, BasicSession)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(BasicSession())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(BasicSession())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -699,7 +683,7 @@ class TestWaitForRun:
         override_session_dependency(app, Session)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(Session())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(Session())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -718,7 +702,7 @@ class TestWaitForRun:
         override_session_dependency(app, BasicSession)
         client = make_client(app)
 
-        with patch("aegra_api.api.runs._get_session_maker", return_value=self._make_maker(BasicSession())):
+        with patch("aegra_api.api.runs._get_session_maker", return_value=_make_session_maker(BasicSession())):
             resp = client.post(
                 "/threads/test-thread-123/runs/wait",
                 json={
@@ -811,13 +795,7 @@ class TestWaitForRunTimeouts:
 
                 return Result()
 
-        from unittest.mock import MagicMock
-
-        session_instance = Session()
-        ctx = MagicMock()
-        ctx.__aenter__ = AsyncMock(return_value=session_instance)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_maker = MagicMock(return_value=ctx)
+        mock_maker = _make_session_maker(Session())
 
         override_session_dependency(app, Session)
         client = make_client(app)

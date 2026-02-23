@@ -906,7 +906,8 @@ async def execute_run_async(
     _multitask_strategy: str | None = None,
     subgraphs: bool | None = False,
 ) -> None:
-    """Execute run asynchronously in background using streaming to capture all events"""  # Use provided session or get a new one
+    """Execute run asynchronously in background using streaming to capture all events."""
+    owns_session = session is None
     if session is None:
         maker = _get_session_maker()
         session = maker()
@@ -1050,6 +1051,8 @@ async def execute_run_async(
         # Clean up broker
         await streaming_service.cleanup_run(run_id)
         active_runs.pop(run_id, None)
+        if owns_session:
+            await session.close()
 
 
 async def update_run_status(

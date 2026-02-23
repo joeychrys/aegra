@@ -271,15 +271,8 @@ class TestStatelessWaitForRun:
     def mock_user(self) -> User:
         return User(identity="test-user", scopes=[])
 
-    @pytest.fixture
-    def mock_session(self) -> AsyncMock:
-        session = AsyncMock()
-        session.refresh = AsyncMock()
-        session.add = MagicMock()
-        return session
-
     @pytest.mark.asyncio
-    async def test_delegates_and_deletes_thread(self, mock_user: User, mock_session: AsyncMock) -> None:
+    async def test_delegates_and_deletes_thread(self, mock_user: User) -> None:
         """Delegates to wait_for_run and deletes ephemeral thread."""
         expected_output = {"result": "done"}
         request = RunCreate(assistant_id="agent", input={"msg": "hi"})
@@ -303,7 +296,7 @@ class TestStatelessWaitForRun:
         mock_delete.assert_called_once_with("eph-thread-1", mock_user.identity)
 
     @pytest.mark.asyncio
-    async def test_keeps_thread_when_requested(self, mock_user: User, mock_session: AsyncMock) -> None:
+    async def test_keeps_thread_when_requested(self, mock_user: User) -> None:
         """Thread is preserved when on_completion='keep'."""
         request = RunCreate(assistant_id="agent", input={"msg": "hi"}, on_completion="keep")
 
@@ -324,7 +317,7 @@ class TestStatelessWaitForRun:
         mock_delete.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_cleans_up_on_error(self, mock_user: User, mock_session: AsyncMock) -> None:
+    async def test_cleans_up_on_error(self, mock_user: User) -> None:
         """Thread is deleted even when wait_for_run raises."""
         request = RunCreate(assistant_id="agent", input={"msg": "hi"})
 
@@ -346,7 +339,7 @@ class TestStatelessWaitForRun:
         mock_delete.assert_called_once_with("eph-thread-3", mock_user.identity)
 
     @pytest.mark.asyncio
-    async def test_cleanup_failure_does_not_mask_original_error(self, mock_user: User, mock_session: AsyncMock) -> None:
+    async def test_cleanup_failure_does_not_mask_original_error(self, mock_user: User) -> None:
         """If _delete_thread_by_id raises during cleanup, the original error propagates."""
         request = RunCreate(assistant_id="agent", input={"msg": "hi"})
 

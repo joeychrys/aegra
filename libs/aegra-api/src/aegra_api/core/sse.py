@@ -162,5 +162,6 @@ class SSEEvent:
     timestamp: datetime | None = None
 
     def __post_init__(self) -> None:
+        """Set timestamp to current UTC time if not provided."""
         if self.timestamp is None:
             self.timestamp = datetime.now(UTC)

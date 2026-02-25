@@ -48,7 +48,7 @@ def format_sse_message(
     else:
         # Use our general serializer by default to handle complex objects
         default_serializer = serializer or _serializer.serialize
-        data_str = json.dumps(data, default=default_serializer, separators=(",", ":"))
+        data_str = json.dumps(data, default=default_serializer, separators=(",", ":"), ensure_ascii=False)
 
     lines.append(f"data: {data_str}")
 
@@ -152,7 +152,6 @@ def create_messages_event(messages_data: Any, event_type: str = "messages", even
         return format_sse_message(event_type, messages_data, event_id)
 
 
-# Legacy compatibility - used by event_store.py
 @dataclass
 class SSEEvent:
     """SSE Event data structure for event storage"""
@@ -163,16 +162,6 @@ class SSEEvent:
     timestamp: datetime | None = None
 
     def __post_init__(self) -> None:
+        """Set timestamp to current UTC time if not provided."""
         if self.timestamp is None:
             self.timestamp = datetime.now(UTC)
-
-    def format(self) -> str:
-        """Format as proper SSE event"""
-        json_data = json.dumps(self.data, default=str)
-        return f"id: {self.id}\nevent: {self.event}\ndata: {json_data}\n\n"
-
-
-def format_sse_event(id: str, event: str, data: dict[str, Any]) -> str:
-    """Format SSE event (used by event_store)"""
-    json_data = json.dumps(data, default=str)
-    return f"id: {id}\nevent: {event}\ndata: {json_data}\n\n"

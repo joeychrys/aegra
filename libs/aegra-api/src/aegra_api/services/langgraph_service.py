@@ -424,6 +424,9 @@ def create_run_config(
     cfg["configurable"].setdefault("thread_id", thread_id)
     cfg["configurable"].setdefault("run_id", run_id)
 
+    # Ensure LangChain's root run ID is set to match so that astream_events recognizes it
+    cfg.setdefault("run_id", run_id)
+
     # Add observability callbacks from various potential sources
     tracing_callbacks = get_tracing_callbacks()
     if tracing_callbacks:

@@ -772,6 +772,25 @@ class TestLangGraphServiceConfigs:
         if "metadata" in result:
             assert "langfuse_user_id" not in result["metadata"]
 
+    def test_create_run_config_sets_top_level_run_id(self):
+        """Regression: run_id must appear at top-level so astream_events uses it as root run ID."""
+        mock_user = Mock()
+        mock_user.identity = "user-123"
+        mock_user.display_name = "Test User"
+        mock_user.to_dict.return_value = {"identity": "user-123"}
+
+        run_id = "run-abc-123"
+        thread_id = "thread-456"
+
+        with patch(
+            "aegra_api.services.langgraph_service.get_tracing_callbacks",
+            return_value=[],
+        ):
+            result = create_run_config(run_id, thread_id, mock_user)
+
+        assert result["run_id"] == run_id
+        assert result["configurable"]["run_id"] == run_id
+
 
 @pytest.mark.asyncio
 async def test_get_base_graph_compiles_stategraph(monkeypatch):

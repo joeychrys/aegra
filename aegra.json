@@ -8,5 +8,9 @@
   },
   "http": {
     "app": "./examples/custom_routes_example.py:app"
+  },
+  "hooks": {
+    "path": "./examples/hooks_example.py:hooks",
+    "timeout": 10
   }
 }

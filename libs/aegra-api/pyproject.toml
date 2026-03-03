@@ -43,6 +43,12 @@ dependencies = [
     # Utils
     "structlog>=25.4.0",
     "asgi-correlation-id>=4.3.4",
+
+    # Auth
+    "PyJWT[crypto]>=2.8.0",
+
+    # Billing
+    "polar-sdk>=0.22.0",
 ]
 
 [project.urls]

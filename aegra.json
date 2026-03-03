@@ -6,11 +6,14 @@
     "subgraph_agent": "./examples/subgraph_agent/graph.py:graph",
     "subgraph_hitl_agent": "./examples/subgraph_hitl_agent/graph.py:graph"
   },
+  "auth": {
+    "path": "./examples/jwt_mock_auth_example.py:auth"
+  },
   "http": {
     "app": "./examples/custom_routes_example.py:app"
   },
   "hooks": {
-    "path": "./examples/hooks_example.py:hooks",
+    "path": "./examples/polar_billing_hooks.py:hooks",
     "timeout": 10
   }
 }

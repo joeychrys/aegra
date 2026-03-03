@@ -668,6 +668,24 @@ async def execute_run_async(
 
 ---
 
+## Bugs
+
+### `ctx.output` is empty when client doesn't request `"values"` stream mode
+
+**Status:** Open
+
+**Severity:** High — hooks that depend on `ctx.output` (e.g., `polar_billing_hooks.py`) silently do nothing when the client uses `streamMode: 'messages-tuple'` or any mode that doesn't include `"values"`.
+
+**Root cause:** In `execute_run_async()` (`runs.py:1054-1056`), `final_output` is only set when a `"values"` event comes through the stream. The stream mode list passed to `stream_graph_events()` comes directly from the client request. If the client doesn't request `"values"`, no values events are yielded, `final_output` stays `None`, and `ctx.output` becomes `{}`.
+
+**Impact:** Any `after_run` or `on_run_error` hook that reads `ctx.output` (e.g., to extract `usage_metadata` for billing) gets an empty dict and silently exits. The hook appears to be "not triggered" but it actually fires — it just has no data to work with.
+
+**Fix:** In `execute_run_async()`, always include `"values"` in the internal stream mode list passed to `stream_graph_events()`, regardless of what the client requested. Filter out the extra values events before forwarding to the broker/storage so clients only receive the events they asked for. Also move the interrupt detection check (`"__interrupt__" in event_data`) above the filter so interrupts are still detected from internally-added values events.
+
+**Workaround:** Clients can add `"values"` to their `streamMode` (e.g., `streamMode: ['messages-tuple', 'values']`), but this sends unnecessary data over the wire.
+
+---
+
 ## Known Issues and Mitigations
 
 ### 1. Hook timeout — hanging external calls (HIGH)

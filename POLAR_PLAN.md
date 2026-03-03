@@ -128,17 +128,54 @@ You can add up to 50 key-value pairs to `metadata` alongside `_llm`. Useful addi
 
 ### One Event Per Model Per Run
 
-If a single run uses multiple models (e.g., `gpt-4o` for reasoning and `gpt-4o-mini` for summarization), ingest **one event per model**. The `UsageMetadataCallbackHandler` from `langchain-core` groups token counts by model name automatically, so you iterate over its dictionary and emit one event per entry.
+If a single run uses multiple models (e.g., `gpt-4o` for reasoning and `gpt-4o-mini` for summarization), ingest **one event per model**. The `get_usage_metadata_callback()` context manager used inside graph nodes groups token counts by model name automatically, so the hook iterates over its dictionary and emits one event per entry.
 
 ---
 
-## Token Tracking with `UsageMetadataCallbackHandler`
+## Token Tracking — Graph-Level Responsibility
 
-Hooks themselves don't track tokens — they are general-purpose (see [PLAN.md](./PLAN.md)). Token tracking is opt-in using LangGraph's `UsageMetadataCallbackHandler` from `langchain-core`.
+Token tracking is **not** a server-level concern. It is opt-in at the **graph level**. Graphs that want to track token usage do so by using `get_usage_metadata_callback()` from `langchain-core` inside their nodes and writing the result to graph state.
 
 ### How It Works
 
-`langchain-core` provides `get_usage_metadata_callback()`, a context manager that creates a `UsageMetadataCallbackHandler` and auto-injects it into all LLM calls within its scope via `ContextVar`. The handler listens for `on_llm_end` events and accumulates `usage_metadata` from `AIMessage` responses. After the graph finishes, the callback's `usage_metadata` attribute contains a dict keyed by model name:
+The `react_agent` example demonstrates the pattern:
+
+1. **Graph node uses the callback** (`examples/react_agent/graph.py:42-62`):
+
+```python
+from langchain_core.callbacks import get_usage_metadata_callback
+
+async def call_model(state: State, runtime: Runtime[Context]) -> dict:
+    model = load_chat_model(runtime.context.model).bind_tools(TOOLS)
+
+    with get_usage_metadata_callback() as cb:
+        response = await model.ainvoke([system_message, *state.messages])
+
+    return {"messages": [response], "usage_metadata": dict(cb.usage_metadata)}
+```
+
+2. **State schema defines the field** with a reducer (`examples/react_agent/state.py:14-77`):
+
+```python
+def _merge_usage_metadata(current: dict | None, update: dict | None) -> dict:
+    """Last-write-wins — the callback accumulates cumulatively."""
+    if update is not None:
+        return update
+    return current or {}
+
+@dataclass
+class State(InputState):
+    usage_metadata: Annotated[dict[str, Any], _merge_usage_metadata] = field(default_factory=dict)
+```
+
+3. **Final graph state flows to hooks via `ctx.output`**:
+   - When the graph finishes, the final state (including `usage_metadata`) becomes `final_output` in `execute_run_async` (`runs.py:1055-1056`)
+   - The `after_run` hook receives it as `ctx.output`
+   - Token data is at `ctx.output["usage_metadata"]`
+
+### What the Data Looks Like
+
+After a run, `ctx.output["usage_metadata"]` contains a dict keyed by model name:
 
 ```python
 {
@@ -158,37 +195,13 @@ Hooks themselves don't track tokens — they are general-purpose (see [PLAN.md](
 }
 ```
 
-### Injecting the Callback
+### Prerequisite: `model_name` in Response Metadata
 
-Since hooks can't modify the run config (they are observe-only), token tracking must be enabled at the server level. `langchain-core` (>= 0.3.49) provides `get_usage_metadata_callback()` — a context manager that uses `ContextVar` + `register_configure_hook` to **auto-inject** the callback into every LLM call within its scope. No manual `config["callbacks"]` manipulation is needed.
+`get_usage_metadata_callback()` requires both `AIMessage.usage_metadata` and `response_metadata["model_name"]` to be non-None. If either is missing, that LLM call's tokens are silently skipped. `ChatOpenAI`, `ChatAnthropic`, and most major providers populate both.
 
-**Wrap graph execution in `execute_run_async`**
+### Graphs That Don't Track Tokens
 
-```python
-# In execute_run_async, wrap the graph execution block:
-from langchain_core.callbacks import get_usage_metadata_callback
-
-with get_usage_metadata_callback() as usage_cb:
-    async with langgraph_service.get_graph(graph_id) as graph:
-        async for event_type, event_data in stream_graph_events(...):
-            ...
-
-# After execution, build extras for RunContext:
-run_extras: dict[str, Any] = {}
-if usage_cb.usage_metadata:
-    run_extras["usage_metadata"] = dict(usage_cb.usage_metadata)
-
-# Pass run_extras as the `extras` kwarg when constructing RunContext
-# for after_run and on_run_error hooks
-```
-
-How it works under the hood:
-1. `get_usage_metadata_callback()` calls `register_configure_hook()` with a `ContextVar` marked `inheritable=True`
-2. LangChain's `_configure()` — which runs on every callback manager creation, including inside each LangGraph node — checks the `ContextVar` and auto-injects the handler
-3. `ContextVar` values propagate through `await` and `asyncio.create_task()`, so it works correctly in async server code
-4. The handler's `on_llm_end` extracts `AIMessage.usage_metadata` and `response_metadata["model_name"]`, accumulating per-model totals
-
-The hooks themselves never import or interact with the callback handler. They simply read `ctx.extras.get("usage_metadata")`. This keeps the hooks system decoupled from `langchain-core`. **No graph code changes are required** — the context manager intercepts all LLM calls transparently.
+Graphs that don't use `get_usage_metadata_callback()` simply won't have `usage_metadata` in their output. The billing hooks handle this gracefully — they check for the key and skip silently if absent.
 
 ---
 
@@ -197,7 +210,13 @@ The hooks themselves never import or interact with the callback handler. They si
 ### `hooks.py` — The Billing Hooks File
 
 ```python
-"""Aegra billing hooks using Polar.sh for usage-based billing."""
+"""Aegra billing hooks using Polar.sh for usage-based billing.
+
+Token usage data comes from the graph's final output state. Graphs that
+track tokens via ``get_usage_metadata_callback()`` write ``usage_metadata``
+to their state, which becomes available as ``ctx.output["usage_metadata"]``
+in after_run and on_run_error hooks.
+"""
 
 import os
 from typing import Any
@@ -236,20 +255,31 @@ def resolve_vendor(model_name: str) -> str:
     return "unknown"
 
 
+def _extract_usage_metadata(ctx) -> dict[str, Any] | None:
+    """Extract usage_metadata from graph output.
+
+    Token usage is a graph-level concern. Graphs that use
+    ``get_usage_metadata_callback()`` write ``usage_metadata`` into their
+    state, which becomes the run's final output (``ctx.output``).
+
+    Returns None if the graph didn't track tokens or the output is unavailable.
+    """
+    if not isinstance(ctx.output, dict):
+        return None
+    return ctx.output.get("usage_metadata")
+
+
 @hooks.after_run
 async def report_usage(ctx) -> None:
     """Ingest token usage events into Polar.sh after every successful run.
 
-    Requires UsageMetadataCallbackHandler to be injected into the run config
-    at the server level. When injected, the server populates
-    ctx.extras["usage_metadata"] with per-model token counts.
+    Reads usage_metadata from the graph's final output state
+    (ctx.output["usage_metadata"]).
     """
     if ctx.graph_id not in PAID_AGENTS:
         return
 
-    # usage_metadata is populated by the server via extras when
-    # UsageMetadataCallbackHandler is injected. If not present, skip silently.
-    usage_metadata: dict[str, Any] | None = ctx.extras.get("usage_metadata")
+    usage_metadata = _extract_usage_metadata(ctx)
     if not usage_metadata:
         return
 
@@ -274,7 +304,7 @@ async def report_usage(ctx) -> None:
 
     if events:
         try:
-            await polar.events.ingest({"events": events})
+            await polar.events.ingest_async(request={"events": events})
         except Exception:
             logger.exception(
                 "Failed to ingest usage events to Polar",
@@ -290,11 +320,15 @@ async def report_partial_usage(ctx) -> None:
     Even when a run fails, tokens were consumed up to the point of failure.
     Whether to bill for partial usage is a business decision — this hook
     reports it. Remove this hook if you don't want to bill for failed runs.
+
+    Note: partial usage is only available if the graph emitted at least one
+    ``values`` event before the error occurred. If the graph failed before
+    producing any output, ``ctx.output`` will be None and no usage is reported.
     """
     if ctx.graph_id not in PAID_AGENTS:
         return
 
-    usage_metadata: dict[str, Any] | None = ctx.extras.get("usage_metadata")
+    usage_metadata = _extract_usage_metadata(ctx)
     if not usage_metadata:
         return
 
@@ -319,7 +353,7 @@ async def report_partial_usage(ctx) -> None:
 
     if events:
         try:
-            await polar.events.ingest({"events": events})
+            await polar.events.ingest_async(request={"events": events})
         except Exception:
             logger.exception(
                 "Failed to ingest partial usage events to Polar",
@@ -371,7 +405,7 @@ async def check_credits(ctx) -> None:
     try:
         # Query Polar for the customer's meter balance
         # API: GET /v1/customer-meters/?external_customer_id=<id>
-        result = await polar.customer_meters.list(
+        result = await polar.customer_meters.list_async(
             external_customer_id=ctx.user.identity,
         )
 
@@ -425,7 +459,15 @@ Polar aggregates all `ai_usage` events for the customer regardless of run bounda
 
 ### Cancellations
 
-When a client disconnects and the run is cancelled, `on_run_error` fires with `error_type="CancelledError"`. The `report_partial_usage` hook ingests whatever tokens were consumed before cancellation.
+When a client disconnects and the run is cancelled, `on_run_error` fires with `error_type="CancelledError"`. The `report_partial_usage` hook ingests whatever tokens were consumed before cancellation — but only if the graph had emitted at least one `values` event before the cancellation occurred. If the graph was cancelled before producing any output, `ctx.output` is `None` and no usage is reported.
+
+### Error Cases
+
+When a run fails with an exception, `on_run_error` fires. Whether `ctx.output` contains `usage_metadata` depends on timing:
+
+- If the graph completed at least one node that wrote to `usage_metadata` and emitted a `values` event, partial usage data will be available
+- If the graph failed before any `values` event, `ctx.output` will be `None` or `{}`
+- The `_extract_usage_metadata()` helper handles all these cases gracefully
 
 ---
 
@@ -435,19 +477,18 @@ When a client disconnects and the run is cancelled, `on_run_error` fires with `e
 User sends request
     |
     v
-before_run hook (optional: check credit balance)
+before_run hook (optional: check credit balance via Polar API)
     |
     v
-with get_usage_metadata_callback() as usage_cb:
+Graph executes
+    |--- graph nodes use get_usage_metadata_callback() to track tokens
+    |--- graph writes usage_metadata to state
+    |--- final state becomes final_output in execute_run_async
     |
     v
-    Graph executes (callback auto-injected via ContextVar, tracks tokens)
-    |
-    v
-Server reads usage_cb.usage_metadata -> populates ctx.extras["usage_metadata"]
-    |
-    v
-after_run hook reads ctx.extras["usage_metadata"] -> polar.events.ingest({ai_usage event})
+after_run hook reads ctx.output["usage_metadata"]
+    |--- builds Polar events (one per model)
+    |--- calls polar.events.ingest_async()
     |
     v
 Polar aggregates: credits deducted first, overage billed end-of-month
@@ -467,8 +508,8 @@ Polar aggregates: credits deducted first, overage billed end-of-month
 
 | Concern                       | Handled by    |
 | ----------------------------- | ------------- |
-| Token counting per run        | `get_usage_metadata_callback()` context manager (langchain-core), surfaced via `ctx.extras["usage_metadata"]` |
-| Event ingestion to Polar      | `after_run` / `on_run_error` hooks (read from `ctx.extras`) |
+| Token counting per run        | Graph nodes using `get_usage_metadata_callback()`, written to graph state as `usage_metadata` |
+| Event ingestion to Polar      | `after_run` / `on_run_error` hooks (read from `ctx.output["usage_metadata"]`) |
 | Pre-run credit checks         | `before_run` hook (optional) |
 | User identity mapping         | Aegra auth system (`ctx.user.identity`) |
 
@@ -479,6 +520,6 @@ Polar aggregates: credits deducted first, overage billed end-of-month
 | Package       | Purpose                           | Required? |
 | ------------- | --------------------------------- | --------- |
 | `polar-sdk`   | Polar API client                  | Yes       |
-| `langchain-core` | `get_usage_metadata_callback()` context manager (>= 0.3.49, installed: transitive via `langgraph>=1.0.3`) | Yes (for token tracking) |
+| `langchain-core` | `get_usage_metadata_callback()` context manager (>= 0.3.49, installed: transitive via `langgraph>=1.0.3`) | Yes (for token tracking in graphs) |
 
 Both should be added to the project's dependencies if not already present. `langchain-core` is available transitively via `langgraph>=1.0.3` but should be listed explicitly if billing is a core feature.

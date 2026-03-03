@@ -4,11 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Annotated
+from typing import Annotated, Any
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
 from langgraph.managed import IsLastStep
+
+
+def _merge_usage_metadata(
+    current: dict[str, Any] | None,
+    update: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge per-model token usage dicts across multiple LLM calls.
+
+    Each call to ``call_model`` produces a snapshot of cumulative usage from the
+    ``get_usage_metadata_callback()`` context manager.  Since the context manager
+    accumulates across the entire run, the latest snapshot is always a superset
+    of previous ones — so we simply replace with the update.
+    """
+    if update is not None:
+        return update
+    return current or {}
 
 
 @dataclass
@@ -49,4 +65,13 @@ class State(InputState):
 
     This is a 'managed' variable, controlled by the state machine rather than user code.
     It is set to 'True' when the step count reaches recursion_limit - 1.
+    """
+
+    usage_metadata: Annotated[dict[str, Any], _merge_usage_metadata] = field(default_factory=dict)
+    """
+    Per-model token usage accumulated across all LLM calls in this run.
+
+    Populated by ``call_model`` using ``get_usage_metadata_callback()``.
+    Keyed by model name, values contain ``input_tokens``, ``output_tokens``,
+    ``total_tokens``, and optional detail breakdowns.
     """
